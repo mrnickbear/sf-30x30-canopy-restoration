@@ -55,8 +55,7 @@ library(lidR)
 library(sf)
 library(terra) #Does lidrtree use Stars library?  Maybe, but it doesn't do much raster processing.
 
-setwd("c:\\tree")
-# getwd()
+getwd()
 
 # Read in one LiDAR file
 # las <- readLAS("tilecls/04650240.laz",  filter = "-set_withheld_flag 0", select = "xyzc") # load XYZ and classification, only 

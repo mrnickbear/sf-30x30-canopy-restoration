@@ -52,7 +52,6 @@ library(lidR)
 library(sf)
 library(terra) #Does lidrtree use Stars library?  Maybe, but it doesn't do much raster processing.
 
-setwd("c:\\tree")
 # getwd()
 
 # Read in one LiDAR file

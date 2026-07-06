@@ -61,7 +61,6 @@ library(terra) #Does lidrtree use Stars library?  Maybe, but it doesn't do much 
 library(mapview)
 library(scales)
 
-setwd("c:\\tree")
 # getwd()
 
 # Read in one LiDAR file

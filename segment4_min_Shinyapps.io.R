@@ -74,8 +74,6 @@ library(scales)
 library(tmap)
 library(shiny)
 
-setwd("c:\\tree")
-
 
 # writeLAS(seg_snags, "LHH_aa_z3segssnags.las", index = FALSE)
 seg_snags <- readALSLAS("LHH_aa_z3segssnags.las", filter = "-drop_z_below 10") #assigns type = airborne
