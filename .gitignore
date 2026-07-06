@@ -47,3 +47,13 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# ==========================================
+# Heavy Spatial Data (Local Processing Only)
+# ==========================================
+*.las
+*.laz
+*.tif
+*.tiff
+data/
+raw_data/
