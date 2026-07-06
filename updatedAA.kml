@@ -1,0 +1,488 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Untitled layer</name>
+    <Style id="line-000000-1200-normal">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.2</width>
+      </LineStyle>
+    </Style>
+    <Style id="line-000000-1200-highlight">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.8</width>
+      </LineStyle>
+    </Style>
+    <StyleMap id="line-000000-1200">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#line-000000-1200-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#line-000000-1200-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="line-C5E1A5-4875-normal">
+      <LineStyle>
+        <color>ffa5e1c5</color>
+        <width>4.875</width>
+      </LineStyle>
+    </Style>
+    <Style id="line-C5E1A5-4875-highlight">
+      <LineStyle>
+        <color>ffa5e1c5</color>
+        <width>7.3125</width>
+      </LineStyle>
+    </Style>
+    <StyleMap id="line-C5E1A5-4875">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#line-C5E1A5-4875-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#line-C5E1A5-4875-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Style id="poly-000000-1200-77-normal">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.2</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>4d000000</color>
+        <fill>1</fill>
+        <outline>1</outline>
+      </PolyStyle>
+    </Style>
+    <Style id="poly-000000-1200-77-highlight">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.8</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>4d000000</color>
+        <fill>1</fill>
+        <outline>1</outline>
+      </PolyStyle>
+    </Style>
+    <StyleMap id="poly-000000-1200-77">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#poly-000000-1200-77-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#poly-000000-1200-77-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Placemark>
+      <name>Full Tree Analysis Area</name>
+      <description><![CDATA[description: <br>X.id: <br>X.version: <br>X.created_at: <br>X.updated_at: <br>land_id: <br>land_name: <br>dept_id: <br>address: <br>city: <br>zip: <br>category: <br>department_name: <br>data_last_updated: <br>data_as_of: <br>data_loaded_at: ]]></description>
+      <styleUrl>#line-C5E1A5-4875</styleUrl>
+      <ExtendedData>
+        <Data name="description">
+          <value/>
+        </Data>
+        <Data name="X.id">
+          <value/>
+        </Data>
+        <Data name="X.version">
+          <value/>
+        </Data>
+        <Data name="X.created_at">
+          <value/>
+        </Data>
+        <Data name="X.updated_at">
+          <value/>
+        </Data>
+        <Data name="land_id">
+          <value/>
+        </Data>
+        <Data name="land_name">
+          <value/>
+        </Data>
+        <Data name="dept_id">
+          <value/>
+        </Data>
+        <Data name="address">
+          <value/>
+        </Data>
+        <Data name="city">
+          <value/>
+        </Data>
+        <Data name="zip">
+          <value/>
+        </Data>
+        <Data name="category">
+          <value/>
+        </Data>
+        <Data name="department_name">
+          <value/>
+        </Data>
+        <Data name="data_last_updated">
+          <value/>
+        </Data>
+        <Data name="data_as_of">
+          <value/>
+        </Data>
+        <Data name="data_loaded_at">
+          <value/>
+        </Data>
+      </ExtendedData>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+          -122.4603971,37.7498701,0
+          -122.4605044,37.7500547,0
+          -122.460531,37.750138,0
+          -122.460698,37.751322,0
+          -122.4595334,37.7516272,0
+          -122.458923,37.751789,0
+          -122.4580501,37.7516771,0
+          -122.457106,37.7515074,0
+          -122.4566339,37.7509454,0
+          -122.4547993,37.7509115,0
+          -122.4546196,37.7492001,0
+          -122.4545888,37.7486374,0
+          -122.452219,37.7486155,0
+          -122.4521909,37.7483826,0
+          -122.4520829,37.7481877,0
+          -122.4513289,37.7473946,0
+          -122.4519201,37.7476131,0
+          -122.4525269,37.7478549,0
+          -122.4531337,37.7479419,0
+          -122.4535387,37.7478239,0
+          -122.4541609,37.7467585,0
+          -122.4547094,37.7469607,0
+          -122.4544151,37.7474542,0
+          -122.4544436,37.7484475,0
+          -122.4551265,37.7487388,0
+          -122.455215,37.7488458,0
+          -122.4553625,37.7491364,0
+          -122.456084,37.7496051,0
+          -122.4558964,37.7498447,0
+          -122.4560331,37.7503241,0
+          -122.4569678,37.7503792,0
+          -122.4580099,37.75057,0
+          -122.4586925,37.7501459,0
+          -122.4583076,37.7498405,0
+          -122.457902,37.7491491,0
+          -122.4579952,37.7483687,0
+          -122.4586322,37.7481311,0
+          -122.4603971,37.7498701,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>DLT_040</name>
+      <description><![CDATA[description: <br>X.id: <br>X.version: <br>X.created_at: <br>X.updated_at: <br>land_id: <br>land_name: <br>dept_id: <br>address: <br>city: <br>zip: <br>category: <br>department_name: <br>data_last_updated: <br>data_as_of: <br>data_loaded_at: ]]></description>
+      <styleUrl>#line-000000-1200</styleUrl>
+      <ExtendedData>
+        <Data name="description">
+          <value/>
+        </Data>
+        <Data name="X.id">
+          <value/>
+        </Data>
+        <Data name="X.version">
+          <value/>
+        </Data>
+        <Data name="X.created_at">
+          <value/>
+        </Data>
+        <Data name="X.updated_at">
+          <value/>
+        </Data>
+        <Data name="land_id">
+          <value/>
+        </Data>
+        <Data name="land_name">
+          <value/>
+        </Data>
+        <Data name="dept_id">
+          <value/>
+        </Data>
+        <Data name="address">
+          <value/>
+        </Data>
+        <Data name="city">
+          <value/>
+        </Data>
+        <Data name="zip">
+          <value/>
+        </Data>
+        <Data name="category">
+          <value/>
+        </Data>
+        <Data name="department_name">
+          <value/>
+        </Data>
+        <Data name="data_last_updated">
+          <value/>
+        </Data>
+        <Data name="data_as_of">
+          <value/>
+        </Data>
+        <Data name="data_loaded_at">
+          <value/>
+        </Data>
+      </ExtendedData>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+          -122.4603062,37.7494451,0
+          -122.4602753,37.7493147,0
+          -122.4601157,37.7491503,0
+          -122.4599065,37.7490549,0
+          -122.4596463,37.7490358,0
+          -122.4594666,37.749057,0
+          -122.4593339,37.7491004,0
+          -122.4592118,37.7491799,0
+          -122.4590764,37.7493804,0
+          -122.4590918,37.7497022,0
+          -122.459295,37.7498629,0
+          -122.459618,37.7499372,0
+          -122.4599518,37.7499119,0
+          -122.4601955,37.7497828,0
+          -122.4602914,37.749601,0
+          -122.4603062,37.7494451,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+    <Placemark>
+      <name>Clarendon PS recent tree work area</name>
+      <description><![CDATA[description: <br>X.id: row-n3fp~wvi8-rrxh<br>X.version: rv-7epv_67un.tby3<br>X.created_at: 2025/09/28 17:12:32.911+00<br>X.updated_at: 2025/09/28 17:12:32.911+00<br>land_id: 658<br>land_name: WATER DEPARTMENT, PARCEL 370<br>dept_id: 47<br>address: 201 OLYMPIA WAY<br>city: San Francisco<br>zip: 94131<br>category: PUC/Water Department<br>department_name: Public Utilities Commission<br>data_last_updated: 2018/01/19 05:52:59+00<br>data_as_of: 2025/09/23 23:54:00+00<br>data_loaded_at: 2025/09/28 17:12:27.449+00]]></description>
+      <styleUrl>#poly-000000-1200-77</styleUrl>
+      <ExtendedData>
+        <Data name="description">
+          <value/>
+        </Data>
+        <Data name="X.id">
+          <value>row-n3fp~wvi8-rrxh</value>
+        </Data>
+        <Data name="X.version">
+          <value>rv-7epv_67un.tby3</value>
+        </Data>
+        <Data name="X.created_at">
+          <value>2025/09/28 17:12:32.911+00</value>
+        </Data>
+        <Data name="X.updated_at">
+          <value>2025/09/28 17:12:32.911+00</value>
+        </Data>
+        <Data name="land_id">
+          <value>658</value>
+        </Data>
+        <Data name="land_name">
+          <value>WATER DEPARTMENT, PARCEL 370</value>
+        </Data>
+        <Data name="dept_id">
+          <value>47</value>
+        </Data>
+        <Data name="address">
+          <value>201 OLYMPIA WAY</value>
+        </Data>
+        <Data name="city">
+          <value>San Francisco</value>
+        </Data>
+        <Data name="zip">
+          <value>94131</value>
+        </Data>
+        <Data name="category">
+          <value>PUC/Water Department</value>
+        </Data>
+        <Data name="department_name">
+          <value>Public Utilities Commission</value>
+        </Data>
+        <Data name="data_last_updated">
+          <value>2018/01/19 05:52:59+00</value>
+        </Data>
+        <Data name="data_as_of">
+          <value>2025/09/23 23:54:00+00</value>
+        </Data>
+        <Data name="data_loaded_at">
+          <value>2025/09/28 17:12:27.449+00</value>
+        </Data>
+      </ExtendedData>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <tessellate>1</tessellate>
+            <coordinates>
+              -122.460531,37.750138,0
+              -122.460698,37.751322,0
+              -122.458923,37.751789,0
+              -122.458934,37.751791,0
+              -122.458946,37.751793,0
+              -122.458958,37.751796,0
+              -122.458969,37.751798,0
+              -122.458981,37.7518,0
+              -122.458993,37.751801,0
+              -122.459005,37.751803,0
+              -122.459017,37.751804,0
+              -122.459029,37.751806,0
+              -122.459041,37.751807,0
+              -122.459053,37.751808,0
+              -122.459065,37.751808,0
+              -122.459077,37.751809,0
+              -122.459089,37.751809,0
+              -122.459101,37.75181,0
+              -122.459113,37.75181,0
+              -122.459125,37.751809,0
+              -122.459137,37.751809,0
+              -122.459149,37.751809,0
+              -122.459161,37.751808,0
+              -122.459184,37.751807,0
+              -122.460668,37.751685,0
+              -122.460683,37.751684,0
+              -122.460698,37.751683,0
+              -122.460713,37.751682,0
+              -122.460728,37.75168,0
+              -122.460743,37.751679,0
+              -122.460758,37.751677,0
+              -122.460773,37.751675,0
+              -122.460788,37.751673,0
+              -122.460802,37.751671,0
+              -122.460817,37.751668,0
+              -122.460832,37.751665,0
+              -122.460846,37.751662,0
+              -122.460861,37.751659,0
+              -122.460875,37.751656,0
+              -122.46089,37.751652,0
+              -122.460904,37.751648,0
+              -122.460919,37.751644,0
+              -122.460933,37.75164,0
+              -122.460947,37.751636,0
+              -122.460961,37.751631,0
+              -122.460976,37.751626,0
+              -122.461077,37.751593,0
+              -122.461133,37.751576,0
+              -122.461136,37.751574,0
+              -122.461139,37.751572,0
+              -122.461142,37.75157,0
+              -122.461145,37.751568,0
+              -122.461148,37.751566,0
+              -122.461151,37.751564,0
+              -122.461154,37.751562,0
+              -122.461157,37.75156,0
+              -122.46116,37.751558,0
+              -122.461163,37.751555,0
+              -122.461166,37.751553,0
+              -122.461168,37.751551,0
+              -122.461171,37.751548,0
+              -122.461174,37.751546,0
+              -122.461176,37.751543,0
+              -122.461179,37.751541,0
+              -122.461181,37.751538,0
+              -122.461184,37.751536,0
+              -122.461186,37.751533,0
+              -122.461188,37.751531,0
+              -122.46119,37.751528,0
+              -122.461193,37.751525,0
+              -122.461195,37.751522,0
+              -122.461197,37.75152,0
+              -122.461199,37.751517,0
+              -122.461201,37.751514,0
+              -122.461202,37.751511,0
+              -122.461204,37.751508,0
+              -122.461206,37.751506,0
+              -122.461208,37.751503,0
+              -122.461209,37.7515,0
+              -122.461211,37.751497,0
+              -122.461212,37.751494,0
+              -122.461214,37.751491,0
+              -122.461215,37.751488,0
+              -122.461216,37.751485,0
+              -122.461218,37.751482,0
+              -122.461219,37.751479,0
+              -122.46122,37.751476,0
+              -122.461221,37.751473,0
+              -122.461222,37.751469,0
+              -122.461223,37.751466,0
+              -122.461223,37.751463,0
+              -122.461224,37.75146,0
+              -122.461225,37.751457,0
+              -122.461225,37.751454,0
+              -122.461226,37.751451,0
+              -122.461226,37.751447,0
+              -122.461227,37.751444,0
+              -122.461227,37.751441,0
+              -122.461227,37.751438,0
+              -122.461228,37.751435,0
+              -122.461228,37.751431,0
+              -122.461228,37.751428,0
+              -122.461228,37.751425,0
+              -122.461228,37.751422,0
+              -122.461227,37.751419,0
+              -122.461227,37.751416,0
+              -122.461227,37.751412,0
+              -122.461226,37.751409,0
+              -122.461226,37.751406,0
+              -122.461225,37.751403,0
+              -122.461225,37.7514,0
+              -122.461224,37.751397,0
+              -122.461223,37.751393,0
+              -122.461223,37.75139,0
+              -122.461222,37.751387,0
+              -122.461221,37.751384,0
+              -122.46122,37.751381,0
+              -122.461219,37.751378,0
+              -122.461218,37.751375,0
+              -122.461216,37.751372,0
+              -122.461215,37.751369,0
+              -122.461214,37.751366,0
+              -122.461212,37.751363,0
+              -122.461211,37.75136,0
+              -122.461209,37.751357,0
+              -122.461208,37.751354,0
+              -122.461206,37.751351,0
+              -122.461204,37.751348,0
+              -122.461203,37.751345,0
+              -122.461201,37.751342,0
+              -122.461199,37.75134,0
+              -122.461197,37.751337,0
+              -122.461195,37.751334,0
+              -122.461193,37.751331,0
+              -122.461191,37.751329,0
+              -122.461188,37.751326,0
+              -122.461186,37.751323,0
+              -122.461182,37.751319,0
+              -122.461166,37.751305,0
+              -122.46115,37.751291,0
+              -122.461134,37.751277,0
+              -122.461118,37.751263,0
+              -122.461103,37.751249,0
+              -122.461088,37.751234,0
+              -122.461074,37.751219,0
+              -122.46106,37.751204,0
+              -122.461046,37.751189,0
+              -122.461032,37.751173,0
+              -122.461019,37.751158,0
+              -122.461006,37.751142,0
+              -122.460994,37.751126,0
+              -122.460982,37.75111,0
+              -122.46097,37.751094,0
+              -122.460959,37.751077,0
+              -122.460948,37.75106,0
+              -122.460937,37.751044,0
+              -122.460927,37.751027,0
+              -122.460917,37.75101,0
+              -122.460907,37.750992,0
+              -122.460898,37.750975,0
+              -122.46089,37.750958,0
+              -122.460881,37.75094,0
+              -122.460873,37.750922,0
+              -122.460866,37.750905,0
+              -122.460858,37.750887,0
+              -122.460851,37.750869,0
+              -122.460839,37.750833,0
+              -122.460531,37.750138,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>

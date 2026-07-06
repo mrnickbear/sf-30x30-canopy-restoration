@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Untitled layer</name>
+    <Style id="line-000000-1000-nodesc-normal">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <Style id="line-000000-1000-nodesc-highlight">
+      <LineStyle>
+        <color>ff000000</color>
+        <width>1.5</width>
+      </LineStyle>
+      <BalloonStyle>
+        <text><![CDATA[<h3>$[name]</h3>]]></text>
+      </BalloonStyle>
+    </Style>
+    <StyleMap id="line-000000-1000-nodesc">
+      <Pair>
+        <key>normal</key>
+        <styleUrl>#line-000000-1000-nodesc-normal</styleUrl>
+      </Pair>
+      <Pair>
+        <key>highlight</key>
+        <styleUrl>#line-000000-1000-nodesc-highlight</styleUrl>
+      </Pair>
+    </StyleMap>
+    <Placemark>
+      <name>Tree Analysis</name>
+      <styleUrl>#line-000000-1000-nodesc</styleUrl>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>
+          -122.4605714,37.7497938,0
+          -122.4593698,37.7498532,0
+          -122.4591123,37.7503198,0
+          -122.4594985,37.7519994,0
+          -122.4590801,37.7519825,0
+          -122.4580501,37.7516771,0
+          -122.457106,37.7515074,0
+          -122.4562584,37.7514056,0
+          -122.4547993,37.7513547,0
+          -122.4547135,37.748725,0
+          -122.455443,37.748691,0
+          -122.455443,37.7494545,0
+          -122.4551963,37.7497005,0
+          -122.4555074,37.7504386,0
+          -122.4559164,37.7505998,0
+          -122.4583854,37.75071,0
+          -122.4588816,37.750235,0
+          -122.457902,37.7491491,0
+          -122.4579952,37.7483687,0
+          -122.4586322,37.7481311,0
+          -122.4605714,37.7497938,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>
