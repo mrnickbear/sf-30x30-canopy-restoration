@@ -45,8 +45,8 @@ source("03_visualize.R")   # reads from disk; opens interactive map
 
 Edit `USE_CUSTOM_CIRCLE` in `config.R`:
 
-- `FALSE` (default) – full LHH analysis area from `updatedAA.kml` (~134 000 m²)
-- `TRUE` – small DLT_040 test circle (r = 40 m, ~5 000 m²); faster for testing
+- `FALSE` (default) – full LHH analysis area from `updatedAA.kml` (~134,000 m²)
+- `TRUE` – small DLT_040 test circle (r = 40 m, ~5,000 m²); faster for testing
 
 ---
 

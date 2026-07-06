@@ -48,7 +48,7 @@ seg <- segment_trees(las = nlas, algorithm = li2012())
 
 # ---- Rescale intensity for snag classification ----
 # Wing (2015) expects 8-bit intensity; the 2023 LiDAR data is 16-bit.
-seg@data[, Intensity := as.integer(Intensity / (2^16 - 1) * 255L)]
+seg@data[, Intensity := as.integer(Intensity / (2^16 - 1) * MAX_8BIT_INTENSITY)]
 
 # ---- Snag classification (slow) ----
 message("Classifying snags (wing2015)... This may take several minutes.")

@@ -26,6 +26,11 @@ rm(list = ls())
 source("config.R")
 
 # ---- Step flags ----
+# Validate OUTPUT_LAS_PATH before using it in file.exists().
+if (!nzchar(OUTPUT_LAS_PATH)) {
+  stop("OUTPUT_LAS_PATH in config.R is empty. Please set a valid file path.")
+}
+
 # FORCE_SEGMENT = FALSE: skip step 2 when OUTPUT_LAS_PATH already exists.
 # FORCE_SEGMENT = TRUE:  always re-run segmentation (overwrites the saved file).
 FORCE_SEGMENT  <- FALSE
