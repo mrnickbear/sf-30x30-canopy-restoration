@@ -8,16 +8,16 @@ cs13_f <- 7132  # CA State Plane Zone 3, feet
 
 # ---- File Paths ----
 # Directory containing the raw LAZ/LAS tiles
-LIDAR_CATALOG_PATH <- "tilecls/"
+LIDAR_CATALOG_PATH <- "data/raw_point_clouds/"
 
 # Path for the segmented output LAS (written by 02_segment.R, read by 03_visualize.R)
-OUTPUT_LAS_PATH <- "LHH_aa_z3segssnags.las"
+OUTPUT_LAS_PATH <- "data/raw_point_clouds/LHH_aa_z3segssnags.las"
 
 # ---- Analysis Area ----
 # Set USE_CUSTOM_CIRCLE = TRUE to use the small DLT_040 test circle (fast, ~5000 sq m).
 # Set to FALSE to use the full analysis area from the KML file (~134,000 sq m).
 USE_CUSTOM_CIRCLE <- TRUE
-AOI_KML_PATH      <- "updatedAA.kml"
+AOI_KML_PATH      <- "data/vector/updatedAA.kml"
 
 # DLT_040 test circle parameters (used when USE_CUSTOM_CIRCLE = TRUE)
 CIRCLE_CENTER_X <- 47200

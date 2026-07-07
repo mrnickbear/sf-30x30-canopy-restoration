@@ -55,5 +55,5 @@ rsconnect/
 *.laz
 *.tif
 *.tiff
-data/
+data/raw_point_clouds/
 raw_data/
