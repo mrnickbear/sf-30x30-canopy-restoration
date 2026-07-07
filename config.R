@@ -16,7 +16,7 @@ OUTPUT_LAS_PATH <- "LHH_aa_z3segssnags.las"
 # ---- Analysis Area ----
 # Set USE_CUSTOM_CIRCLE = TRUE to use the small DLT_040 test circle (fast, ~5000 sq m).
 # Set to FALSE to use the full analysis area from the KML file (~134,000 sq m).
-USE_CUSTOM_CIRCLE <- FALSE
+USE_CUSTOM_CIRCLE <- TRUE
 AOI_KML_PATH      <- "updatedAA.kml"
 
 # DLT_040 test circle parameters (used when USE_CUSTOM_CIRCLE = TRUE)
