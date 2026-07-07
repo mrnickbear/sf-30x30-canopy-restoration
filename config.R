@@ -13,6 +13,9 @@ LIDAR_CATALOG_PATH <- "data/raw_point_clouds/tilecls/"
 # Path for the segmented output LAS (written by 02_segment.R, read by 03_visualize.R)
 OUTPUT_LAS_PATH <- "data/raw_point_clouds/LHH_aa_z3segssnags.las"
 
+# Path to the clean DEM used for height normalization in 02_segment.R
+NORMALIZATION_DEM_PATH <- "data/terrain/sf3dxyz_dem25cm_float32.tif"
+
 # ---- Analysis Area ----
 # Set USE_CUSTOM_CIRCLE = TRUE to use the small DLT_040 test circle (fast, ~5000 sq m).
 # Set to FALSE to use the full analysis area from the KML file (~134,000 sq m).
