@@ -8,7 +8,7 @@ cs13_f <- 7132  # CA State Plane Zone 3, feet
 
 # ---- File Paths ----
 # Directory containing the raw LAZ/LAS tiles
-LIDAR_CATALOG_PATH <- "data/raw_point_clouds/"
+LIDAR_CATALOG_PATH <- "data/raw_point_clouds/tilecls/"
 
 # Path for the segmented output LAS (written by 02_segment.R, read by 03_visualize.R)
 OUTPUT_LAS_PATH <- "data/raw_point_clouds/LHH_aa_z3segssnags.las"
