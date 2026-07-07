@@ -18,6 +18,7 @@ source("config.R")
 
 library(lidR)
 library(sf)
+library(stars)
 library(scales)
 
 # ---- Require las in memory ----
@@ -31,7 +32,7 @@ message("Normalizing heights...")
 if (!file.exists(NORMALIZATION_DEM_PATH)) {
   stop("Normalization DEM not found at: ", NORMALIZATION_DEM_PATH)
 }
-dem <- terra::rast(NORMALIZATION_DEM_PATH)
+dem <- stars::read_stars(NORMALIZATION_DEM_PATH)
 nlas <- normalize_height(las, dem)
 nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
 
