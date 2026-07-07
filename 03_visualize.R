@@ -61,8 +61,11 @@ tmap_sf_aerial <- tm_shape(crown_outlines) +
     title = "Height (m)"
   )
 
-tmap_leaflet(tmap_sf_aerial) |>
+tmap_sf_aerial <- 
+  tmap_leaflet(tmap_sf_aerial) |>
   addTiles(
     urlTemplate = PICTOMETRY_URL,
     options = tileOptions(maxZoom = 22, maxNativeZoom = 22)
   )
+
+print(tmap_sf_aerial)
