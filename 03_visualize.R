@@ -69,3 +69,12 @@ tmap_sf_aerial <-
   )
 
 print(tmap_sf_aerial)
+
+# Transform sf objects to WGS84 (EPSG:4326) for web mapping
+treetops_web <- st_transform(metrics, 4326)
+crowns_web <- st_transform(crown_outlines, 4326)
+
+# 2. Export to GeoJSON
+# delete_dsn = TRUE ensures it overwrites cleanly if you re-run the script
+st_write(treetops_web, "data/vector/treetops.geojson", driver = "GeoJSON", delete_dsn = TRUE)
+st_write(crowns_web, "data/vector/crowns.geojson", driver = "GeoJSON", delete_dsn = TRUE)
