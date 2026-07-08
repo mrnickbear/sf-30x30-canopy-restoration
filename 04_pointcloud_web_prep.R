@@ -59,7 +59,7 @@ tree_points <- st_sf(
       tall_crowns$XTOP,
       tall_crowns$YTOP
     ),
-    crs = 7131  # CA State Plane Zone 3, meters
+    crs = WEB_POINT_CLOUD_CRS
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)

@@ -62,3 +62,4 @@ PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictom
 # Keep these separate even though both currently default to 30 m.
 WEB_POINT_CLOUD_MIN_HEIGHT_M <- 30
 WEB_POINT_CLOUD_BUFFER_M <- 30
+WEB_POINT_CLOUD_CRS <- 7131
