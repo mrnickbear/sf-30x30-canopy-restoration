@@ -67,21 +67,21 @@ function localToLngLat(x, y) {
 }
 
 // Zero-pad width mirrors 04_pointcloud_web_prep.R (max digits of viewable treeIDs).
-// Computed once after geojsonData is loaded; cached in _lazPad.
-let _lazPad = 0;
-function lazPadWidth() {
-  if (_lazPad) return _lazPad;
+// Computed once after geojsonData is loaded; cached in _lasPad.
+let _lasPad = 0;
+function lasPadWidth() {
+  if (_lasPad) return _lasPad;
   if (!geojsonData) return 2;
   for (const f of geojsonData.features) {
     if (is3DViewable(f.properties?.ZTOP)) {
-      _lazPad = Math.max(_lazPad, String(f.properties.treeID ?? "").length);
+      _lasPad = Math.max(_lasPad, String(f.properties.treeID ?? "").length);
     }
   }
-  return _lazPad || 2;
+  return _lasPad || 2;
 }
 
-function lazUrl(treeID) {
-  return `${WEB_POINT_CLOUD_DIR}/tree_${String(treeID).padStart(lazPadWidth(), "0")}.laz`;
+function lasUrl(treeID) {
+  return `${WEB_POINT_CLOUD_DIR}/tree_${String(treeID).padStart(lasPadWidth(), "0")}.las`;
 }
 
 // ── Shared state ──────────────────────────────────────────────
@@ -544,6 +544,52 @@ function initDeckGL() {
   });
 }
 
+// ── Native binary LAS parser (no CDN / no WASM required) ─────
+// Supports LAS 1.0–1.4; reads X/Y/Z from the first 12 bytes of each point
+// record (all point formats store scaled-integer X, Y, Z at the same offsets).
+function parseLAS(buffer) {
+  const dv = new DataView(buffer);
+
+  // Validate "LASF" file signature
+  const sig = String.fromCharCode(
+    dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)
+  );
+  if (sig !== "LASF") throw new Error("Not a valid LAS file (bad signature)");
+
+  const vMinor          = dv.getUint8(25);
+  const offsetToPoints  = dv.getUint32(96,  true);
+  const pointRecLen     = dv.getUint16(105, true);
+  // legacy 32-bit count (always populated for LAS ≤ 1.3; may be 0 for LAS 1.4)
+  let   numPoints       = dv.getUint32(107, true);
+
+  // LAS 1.4 stores the authoritative 64-bit count at offset 247
+  if (vMinor >= 4 && numPoints === 0) {
+    numPoints = dv.getUint32(247, true); // low 32 bits sufficient for web exports
+  }
+
+  const xScale = dv.getFloat64(131, true);
+  const yScale = dv.getFloat64(139, true);
+  const zScale = dv.getFloat64(147, true);
+  const xOff   = dv.getFloat64(155, true);
+  const yOff   = dv.getFloat64(163, true);
+  const zOff   = dv.getFloat64(171, true);
+
+  const pts = new Array(numPoints);
+  let zMin = Infinity, zMax = -Infinity;
+
+  for (let i = 0; i < numPoints; i++) {
+    const base = offsetToPoints + i * pointRecLen;
+    const x = dv.getInt32(base,     true) * xScale + xOff;
+    const y = dv.getInt32(base + 4, true) * yScale + yOff;
+    const z = dv.getInt32(base + 8, true) * zScale + zOff;
+    if (z < zMin) zMin = z;
+    if (z > zMax) zMax = z;
+    pts[i] = { position: [x, y, z], z };
+  }
+
+  return { pts, zMin, zMax };
+}
+
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable)
 async function show3D(id) {
   const feature = geojsonData.features.find(
@@ -564,30 +610,21 @@ async function show3D(id) {
   loadingEl.classList.remove("hidden");
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
-  const url = lazUrl(props.treeID);
+  const url = lasUrl(props.treeID);
 
   try {
-    const [{ LASLoader }, { load }] = await Promise.all([
-      import("https://cdn.jsdelivr.net/npm/@loaders.gl/las@3.4.14/dist/index.js"),
-      import("https://cdn.jsdelivr.net/npm/@loaders.gl/core@3.4.14/dist/index.js"),
-    ]);
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status} – ${response.statusText}`);
+    const buffer = await response.arrayBuffer();
 
-    const lasData = await load(url, LASLoader);
-    const pos = lasData.attributes.POSITION.value; // Float32Array [x,y,z, x,y,z, …]
-    const n   = pos.length / 3;
+    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
+    const n = rawPts.length;
 
     // Convert local CRS XY → WGS84 lon/lat; retain Z (height above ground, metres)
-    const pts = new Array(n);
-    let zMin = Infinity, zMax = -Infinity;
-    for (let i = 0; i < n; i++) {
-      const x = pos[i * 3];
-      const y = pos[i * 3 + 1];
-      const z = pos[i * 3 + 2];
-      if (z < zMin) zMin = z;
-      if (z > zMax) zMax = z;
-      const [lon, lat] = localToLngLat(x, y);
-      pts[i] = { position: [lon, lat, z], z };
-    }
+    const pts = rawPts.map(p => {
+      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+      return { position: [lon, lat, p.position[2]], z: p.z };
+    });
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
@@ -645,7 +682,7 @@ async function show3D(id) {
     setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
   } catch (err) {
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
-    console.error("LAZ load error:", err);
+    console.error("LAS load error:", err);
     setStatus(`⚠ Point cloud unavailable for tree ${props.treeID}`);
   }
 }
