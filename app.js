@@ -432,7 +432,7 @@ function renderTable() {
     const heightFmt = typeof row.ZTOP === "number"
       ? row.ZTOP.toFixed(1) : row.ZTOP;
     const badge3d = is3DViewable(row.ZTOP)
-      ? ` <button class="badge-3d" data-tree-id="${row.treeID}">3D</button>` : "";
+      ? ` <button class="badge-3d" data-tree-id="${row.treeID}" aria-label="View tree ${row.treeID} in 3D">3D</button>` : "";
 
     tr.innerHTML =
       `<td>${row.treeID}</td>` +
