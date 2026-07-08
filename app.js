@@ -55,7 +55,7 @@ let searchQuery   = "";
 let deckGL        = null;
 let showBasemap   = true;
 let deckVisible   = false;   // true when 3D point cloud panel is shown
-let currentPointCloudLayer = null;  // cached layer; reused when toggling basemap
+let pointCloudLayer = null;  // cached PointCloudLayer; reused when toggling basemap
 
 // 3D-viewable tree state (populated after both GeoJSON files load)
 let viewableIds   = new Set();  // set of string treeIDs with ZTOP > threshold
@@ -545,10 +545,10 @@ function ensureDeckGL() {
   });
   document.getElementById("btn-toggle-basemap").addEventListener("click", () => {
     showBasemap = !showBasemap;
-    if (deckGL && currentPointCloudLayer) {
+    if (deckGL && pointCloudLayer) {
       const layers = showBasemap
-        ? [makeTileLayer(), currentPointCloudLayer]
-        : [currentPointCloudLayer];
+        ? [makeTileLayer(), pointCloudLayer]
+        : [pointCloudLayer];
       deckGL.setProps({ layers });
     }
   });
@@ -635,34 +635,34 @@ async function showPointCloud(treeID) {
     if (deckMax) deckMax.textContent = zMax.toFixed(1) + " m";
     drawLegend("deck-legend-canvas");
 
-    currentPointCloudLayer = new deck.PointCloudLayer({
-        id: "point-cloud",
-        coordinateSystem: deck.COORDINATE_SYSTEM.METER_OFFSETS,
-        coordinateOrigin: [treetop.lng, treetop.lat],
-        data: {
-          length: nPoints,
-          attributes: {
-            getPosition: { value: offsetPos, size: 3 },
-            getColor:    { value: colours,   size: 3 },
-          },
+    pointCloudLayer = new deck.PointCloudLayer({
+      id: "point-cloud",
+      coordinateSystem: deck.COORDINATE_SYSTEM.METER_OFFSETS,
+      coordinateOrigin: [treetop.lng, treetop.lat],
+      data: {
+        length: nPoints,
+        attributes: {
+          getPosition: { value: offsetPos, size: 3 },
+          getColor:    { value: colours,   size: 3 },
         },
-        pointSize: 2,
-        pickable:  false,
-      });
+      },
+      pointSize: 2,
+      pickable:  false,
+    });
 
     const targetViewState = {
-        longitude:          treetop.lng,
-        latitude:           treetop.lat,
-        zoom:               19,
-        pitch:              60,
-        bearing:            0,
-        transitionDuration: 800,
-      };
+      longitude:          treetop.lng,
+      latitude:           treetop.lat,
+      zoom:               19,
+      pitch:              60,
+      bearing:            0,
+      transitionDuration: 800,
+    };
     savedViewState = { longitude: treetop.lng, latitude: treetop.lat, zoom: 19, pitch: 60, bearing: 0 };
 
     const layers = [];
     if (showBasemap) layers.push(makeTileLayer());
-    layers.push(currentPointCloudLayer);
+    layers.push(pointCloudLayer);
 
     deckGL.setProps({ initialViewState: targetViewState, layers });
 
