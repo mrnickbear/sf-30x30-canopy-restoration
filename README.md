@@ -52,6 +52,29 @@ Edit `USE_CUSTOM_CIRCLE` in `config.R`:
 
 ---
 
+## Web dashboard
+
+`index.html` is a static Leaflet + Deck.gl dashboard that reads
+`data/vector/crowns.geojson` at runtime.  Because browsers block
+`fetch()` on `file://` URLs you must serve the project over HTTP — even
+locally.
+
+**Quickest way (Python 3, no extra install):**
+
+```bash
+python -m http.server 8080
+# then open http://localhost:8080 in your browser
+```
+
+**Or with R's `servr` package:**
+
+```r
+# install.packages("servr")   # first time only
+servr::httd(port = 8080)
+```
+
+---
+
 ## Data sources
 
 - **LiDAR tiles** (not in repo): USGS 2023 San Francisco 3D point cloud  

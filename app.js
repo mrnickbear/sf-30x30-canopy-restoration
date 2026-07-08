@@ -125,13 +125,21 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 async function init() {
   setStatus("Fetching crowns.geojson…");
   try {
+    if (location.protocol === "file:") {
+      throw new Error(
+        'Browsers block local file fetches — serve the project over HTTP instead. ' +
+        'Run: <code>python -m http.server 8080</code> then open ' +
+        '<a href="http://localhost:8080" target="_blank">http://localhost:8080</a>'
+      );
+    }
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
   } catch (err) {
-    setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
+    const html = err.message;
+    document.getElementById("status-msg").innerHTML = `⚠ Could not load crowns.geojson: ${html}`;
     document.getElementById("table-body").innerHTML =
-      `<tr><td colspan="5" class="loading-cell">⚠ ${err.message}</td></tr>`;
+      `<tr><td colspan="5" class="loading-cell">⚠ ${html}</td></tr>`;
     return;
   }
 
