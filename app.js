@@ -718,7 +718,8 @@ async function show3D(id) {
     // The LAS point-record treeID (from segment_trees) may differ from the
     // crown treeID in crowns.geojson.  crownLasMap translates crown ID → LAS ID
     // so the correct segment is highlighted in viridis.
-    const lasTreeID = crownLasMap[String(id)] ?? Number(id);
+    // Use `in` rather than `??` to correctly handle a hypothetical LAS treeID of 0.
+    const lasTreeID = String(id) in crownLasMap ? crownLasMap[String(id)] : Number(id);
     const hasTID    = rawPts.some(p => p.treeID !== null);
 
     const pts = rawPts.map(p => {

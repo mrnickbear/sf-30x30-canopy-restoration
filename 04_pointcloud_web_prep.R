@@ -107,8 +107,9 @@ for (i in seq_len(nrow(clip_windows))) {
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
-    dists <- sqrt((clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2)
-    nearest_tid <- clipped_las@data$treeID[which.min(dists)]
+    # Squared distances avoid sqrt; which.min needs only relative ordering.
+    dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
+    nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
       crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
     }
@@ -122,7 +123,7 @@ for (i in seq_len(nrow(clip_windows))) {
 # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
 # app.js loads this at startup to resolve which LAS treeID to highlight.
 map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
-write(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
+writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
 message("Wrote crown_las_map.json to: ", map_path)
 
 message(
