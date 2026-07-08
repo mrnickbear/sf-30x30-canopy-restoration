@@ -1,0 +1,86 @@
+# 04_pointcloud_web_prep.R
+# Step 4: Export per-tree web-ready LAZ files for tall trees.
+#
+# Reads the normalized + segmented LAS from OUTPUT_LAS_PATH and the Phase 3
+# crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
+# per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
+# points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
+# WEB_POINT_CLOUD_DIR as an individual .laz file.
+
+source("config.R")
+
+library(lidR)
+library(sf)
+
+if (!file.exists(OUTPUT_LAS_PATH)) {
+  stop("Segmented LAS not found at: ", OUTPUT_LAS_PATH,
+       ". Run 02_segment.R first.")
+}
+
+if (!file.exists(CROWNS_GEOJSON_PATH)) {
+  stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
+       ". Run 03_visualize.R first.")
+}
+
+message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
+seg_snags <- readLAS(OUTPUT_LAS_PATH)
+
+if (is.null(seg_snags) || nrow(seg_snags@data) == 0) {
+  stop("Segmented LAS is empty: ", OUTPUT_LAS_PATH)
+}
+
+message("Loading crowns from: ", CROWNS_GEOJSON_PATH)
+crowns <- st_read(CROWNS_GEOJSON_PATH, quiet = TRUE)
+
+required_columns <- c("treeID", "XTOP", "YTOP", "ZTOP")
+missing_columns <- setdiff(required_columns, names(crowns))
+if (length(missing_columns) > 0) {
+  stop("Crowns file is missing required column(s): ",
+       paste(missing_columns, collapse = ", "))
+}
+
+tall_crowns <- crowns[crowns$ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M, ]
+if (nrow(tall_crowns) == 0) {
+  stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
+       " m in ", CROWNS_GEOJSON_PATH)
+}
+
+tree_points <- st_as_sf(
+  tall_crowns,
+  coords = c("XTOP", "YTOP"),
+  crs = cs13_m,
+  remove = FALSE
+)
+clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
+
+dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
+existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
+if (length(existing_outputs) > 0) {
+  file.remove(existing_outputs)
+}
+
+id_width <- max(nchar(as.character(as.integer(clip_windows$treeID))))
+written <- 0L
+
+for (i in seq_len(nrow(clip_windows))) {
+  tree_id <- as.integer(clip_windows$treeID[i])
+  output_path <- file.path(
+    WEB_POINT_CLOUD_DIR,
+    sprintf(paste0("tree_%0", id_width, "d.laz"), tree_id)
+  )
+
+  clipped_las <- clip_roi(seg_snags, clip_windows[i, ])
+  if (is.null(clipped_las) || nrow(clipped_las@data) == 0) {
+    message("Skipping tree ", tree_id, ": no points found in buffered clip.")
+    next
+  }
+
+  writeLAS(clipped_las, output_path, index = FALSE)
+  written <- written + 1L
+  message("Wrote ", output_path)
+}
+
+message(
+  "Web point cloud prep complete. Wrote ", written, " LAZ file(s) to: ",
+  WEB_POINT_CLOUD_DIR
+)

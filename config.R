@@ -13,6 +13,12 @@ LIDAR_CATALOG_PATH <- "data/raw_point_clouds/tilecls/"
 # Path for the segmented output LAS (written by 02_segment.R, read by 03_visualize.R)
 OUTPUT_LAS_PATH <- "data/raw_point_clouds/LHH_aa_z3segssnags.las"
 
+# Phase 3 crown polygons used to prepare browser-sized point clouds in 04_pointcloud_web_prep.R
+CROWNS_GEOJSON_PATH <- "data/vector/crowns.geojson"
+
+# Directory for per-tree web-ready LAZ exports written by 04_pointcloud_web_prep.R
+WEB_POINT_CLOUD_DIR <- "data/web_point_clouds"
+
 # Path to the clean DEM used for height normalization in 02_segment.R
 NORMALIZATION_DEM_PATH <- "data/terrain/sf3dxyz_dem25cm_float32.tif"
 
@@ -51,3 +57,7 @@ MAX_8BIT_INTENSITY <- 255L
 # ---- Visualization ----
 # SF Pictometry 2024 aerial tile URL (XYZ pattern)
 PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}"
+
+# ---- Web point cloud prep ----
+WEB_POINT_CLOUD_MIN_HEIGHT_M <- 30
+WEB_POINT_CLOUD_BUFFER_M <- 30
