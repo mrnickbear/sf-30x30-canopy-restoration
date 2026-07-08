@@ -284,6 +284,13 @@ html, body {
   padding: 1px 3px;
   margin-left: 4px;
   vertical-align: middle;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: inherit;
+}
+.badge-3d:hover {
+  background: rgba(210, 153, 34, 0.40);
+  border-color: var(--accent-amber);
 }
 /* Amber swatch in the map legend */
 .viewable-swatch {

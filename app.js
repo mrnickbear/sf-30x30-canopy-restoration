@@ -432,7 +432,7 @@ function renderTable() {
     const heightFmt = typeof row.ZTOP === "number"
       ? row.ZTOP.toFixed(1) : row.ZTOP;
     const badge3d = is3DViewable(row.ZTOP)
-      ? ` <span class="badge-3d">3D</span>` : "";
+      ? ` <button class="badge-3d" data-tree-id="${row.treeID}">3D</button>` : "";
 
     tr.innerHTML =
       `<td>${row.treeID}</td>` +
@@ -442,6 +442,18 @@ function renderTable() {
       `<td>${row.lng}</td>`;
 
     tr.addEventListener("click", () => selectTree(row.treeID, "table"));
+
+    // 3D button activates 3D view without re-selecting
+    if (is3DViewable(row.ZTOP)) {
+      const btn3d = tr.querySelector(".badge-3d");
+      if (btn3d) {
+        btn3d.addEventListener("click", (e) => {
+          e.stopPropagation();
+          show3D(row.treeID);
+        });
+      }
+    }
+
     tbody.appendChild(tr);
 
     // Cache tr reference for fast selection update
@@ -507,16 +519,12 @@ function selectTree(id, source) {
   // Update Deck.gl
   if (deckGL) renderDeckLayers();
 
-  // Auto-activate 3D point cloud view for viewable trees
   const feature = geojsonData.features.find(
     f => String(f.properties?.treeID) === String(id)
   );
   if (feature) {
     const p = feature.properties;
     setStatus(`Selected tree ${p.treeID} — height ${p.ZTOP ?? "—"} m, snag class ${p.snagCls ?? 0}`);
-    if (is3DViewable(p.ZTOP)) {
-      show3D(id);
-    }
   }
 }
 
