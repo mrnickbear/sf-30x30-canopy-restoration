@@ -13,6 +13,7 @@ source("config.R")
 
 library(lidR)
 library(sf)
+library(jsonlite)
 
 if (!file.exists(OUTPUT_LAS_PATH)) {
   stop("Segmented LAS not found at: ", OUTPUT_LAS_PATH,
@@ -82,6 +83,9 @@ if (length(existing_outputs) > 0) {
 
 max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
+# Maps crown treeID (character) -> LAS segment treeID (integer)
+# Written to crown_las_map.json so app.js can colour the correct tree.
+crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
@@ -96,10 +100,30 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
+  # The treeID attribute in the LAS is assigned by segment_trees() and may not
+  # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
+  # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
+  # highlight the correct segment.
+  if ("treeID" %in% names(clipped_las@data)) {
+    xtop <- clip_windows$XTOP[i]
+    ytop <- clip_windows$YTOP[i]
+    dists <- sqrt((clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2)
+    nearest_tid <- clipped_las@data$treeID[which.min(dists)]
+    if (!is.na(nearest_tid)) {
+      crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
+    }
+  }
+
   writeLAS(clipped_las, output_path, index = FALSE)
   written <- written + 1L
   message("Wrote ", output_path)
 }
+
+# Write the crown → LAS treeID mapping alongside the per-tree LAS files.
+# app.js loads this at startup to resolve which LAS treeID to highlight.
+map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
+write(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
+message("Wrote crown_las_map.json to: ", map_path)
 
 message(
   "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",

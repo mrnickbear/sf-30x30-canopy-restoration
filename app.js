@@ -107,6 +107,12 @@ let searchQuery    = "";
 let deckGL         = null;
 let showBasemap    = true;
 
+// Maps crown treeID (string) → LAS segment treeID (number).
+// Loaded from crown_las_map.json written by 04_pointcloud_web_prep.R.
+// The LAS point-record treeID (from segment_trees) is not always the same
+// as the crown treeID in crowns.geojson; this map resolves the difference.
+let crownLasMap    = {};  // populated by init()
+
 // ── Utility: normalise height value ───────────────────────────
 function heightNorm(z) {
   if (heightMax === heightMin) return 0.5;
@@ -217,6 +223,14 @@ async function init() {
     tbody.appendChild(tr);
     return;
   }
+
+  // Load the crown → LAS treeID mapping produced by 04_pointcloud_web_prep.R.
+  // Failure is non-fatal: the map stays empty and treeID matching falls back to
+  // using the crown treeID directly (works when treeIDs happen to match).
+  try {
+    const mapRes = await fetch(`${WEB_POINT_CLOUD_DIR}/crown_las_map.json`);
+    if (mapRes.ok) crownLasMap = await mapRes.json();
+  } catch (_) { /* ignore — 3D treeID colouring will fall back gracefully */ }
 
   // Compute height extent from ZTOP
   const heights = geojsonData.features
@@ -700,8 +714,12 @@ async function show3D(id) {
     // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
     // XY: geographic 1:1 scale via the affine transform below.
     // Z:  elevation in metres, used as-is so distances are not distorted.
-    const mainTID = Number(id);
-    const hasTID  = rawPts.some(p => p.treeID !== null);
+    //
+    // The LAS point-record treeID (from segment_trees) may differ from the
+    // crown treeID in crowns.geojson.  crownLasMap translates crown ID → LAS ID
+    // so the correct segment is highlighted in viridis.
+    const lasTreeID = crownLasMap[String(id)] ?? Number(id);
+    const hasTID    = rawPts.some(p => p.treeID !== null);
 
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
@@ -724,14 +742,14 @@ async function show3D(id) {
       data:        pts,
       getPosition: d => d.position,
       getColor:    d => {
-        if (hasTID && d.treeID !== null && d.treeID !== mainTID) {
+        if (hasTID && d.treeID !== null && d.treeID !== lasTreeID) {
           return [160, 160, 160, 160]; // surrounding context: grey
         }
         const t = (d.z - zMin) / zRange;
         return [...viridisColor(t), 255]; // selected tree: viridis by elevation
       },
       pointSize: 2,
-      updateTriggers: { getColor: [mainTID, hasTID] },
+      updateTriggers: { getColor: [lasTreeID, hasTID] },
     });
 
     const layers = showBasemap
