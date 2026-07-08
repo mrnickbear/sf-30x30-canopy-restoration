@@ -15,9 +15,11 @@ const DEFAULT_ZOOM    = 18;
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 
-// Surrounding-tree context in 3D view
-const SURROUND_MAX_TREES   = 5;    // max number of nearby trees to load as grey context
-const SURROUND_MAX_DIST_M  = 100;  // local CRS metres — treetop-to-treetop search radius
+// LAS parsing constants
+// Standard point record size (bytes) for each point data format (ASPRS LAS 1.4 spec)
+const POINT_FORMAT_SIZE = [20, 28, 26, 34, 57, 63, 30, 36, 38, 59, 67];
+// Extra bytes data_type → byte width (types 1–10; type 0 is undocumented/variable)
+const EXTRA_BYTE_SIZES = [0, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
 
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
@@ -528,8 +530,9 @@ function initDeckGL() {
     controller: true,
     initialViewState: { ...DECK_DEFAULT_VIEW },
     onViewStateChange: ({ viewState: vs }) => {
+      // Track current view state for the reset button only; do NOT call
+      // setProps here — that would interfere with programmatic fly-to transitions.
       currentViewState = vs;
-      deckGL.setProps({ initialViewState: vs });
     },
     layers: [],
     getCursor: ({ isDragging, isHovering }) =>
@@ -549,9 +552,9 @@ function initDeckGL() {
 }
 
 // ── Native binary LAS parser (no CDN / no WASM required) ─────
-// Supports LAS 1.0–1.4; reads X/Y/Z from the first 12 bytes of each point
-// record (all point formats store scaled-integer X, Y, Z at the same offsets).
-// Header field offsets follow the LAS 1.4 spec (ASPRS LAS Specification 1.4-R15).
+// Supports LAS 1.0–1.4; reads X/Y/Z and, when present, the per-point treeID
+// extra byte attribute written by lidR's segment_trees().
+// Header field offsets follow the ASPRS LAS 1.4-R15 specification.
 function parseLAS(buffer) {
   const dv = new DataView(buffer);
 
@@ -561,14 +564,16 @@ function parseLAS(buffer) {
   );
   if (sig !== "LASF") throw new Error("Not a valid LAS file (bad signature)");
 
-  const vMinor         = dv.getUint8(25);          // offset 25: version minor
-  const offsetToPoints = dv.getUint32(96,  true);  // offset 96:  offset to point data
-  const pointRecLen    = dv.getUint16(105, true);  // offset 105: point data record length
+  const headerSize     = dv.getUint16(94,  true);  // offset 94:  header size (bytes)
+  const vMinor         = dv.getUint8(25);           // offset 25:  version minor
+  const numVLRs        = dv.getUint32(100, true);   // offset 100: number of VLRs
+  const pointFormat    = dv.getUint8(104) & 0x3F;   // offset 104: point data format (mask compression bit)
+  const offsetToPoints = dv.getUint32(96,  true);   // offset 96:  offset to point data
+  const pointRecLen    = dv.getUint16(105, true);   // offset 105: point data record length
   // offset 107: legacy 32-bit point count (always valid for LAS ≤ 1.3; may be 0 for LAS 1.4)
   let numPoints = dv.getUint32(107, true);
 
-  // LAS 1.4 stores the authoritative 64-bit count at offset 247; use BigInt to avoid
-  // silent truncation of files with more than 2^32 – 1 points.
+  // LAS 1.4 stores the authoritative 64-bit count at offset 247
   if (vMinor >= 4 && numPoints === 0) {
     numPoints = Number(dv.getBigUint64(247, true));
   }
@@ -581,47 +586,84 @@ function parseLAS(buffer) {
   const yOff   = dv.getFloat64(163, true);  // offset 163: Y offset
   const zOff   = dv.getFloat64(171, true);  // offset 171: Z offset
 
+  // ── Parse VLRs to locate the treeID extra bytes attribute ────
+  // lidR stores treeID as an int32 Extra Bytes record (LASF_Spec / record ID 4).
+  // Each extra bytes descriptor is 192 bytes; the name field starts at byte 4.
+  const stdPointSize = POINT_FORMAT_SIZE[pointFormat] ?? 20;
+  let treeIDOffset = -1;  // byte offset of treeID within a full point record (-1 = not found)
+
+  let vlrPos = headerSize;
+  for (let v = 0; v < numVLRs && vlrPos + 54 <= offsetToPoints; v++) {
+    let userID = "";
+    for (let c = 0; c < 16; c++) {
+      const ch = dv.getUint8(vlrPos + 2 + c);
+      if (ch === 0) break;
+      userID += String.fromCharCode(ch);
+    }
+    const recordID  = dv.getUint16(vlrPos + 18, true);
+    const recordLen = dv.getUint16(vlrPos + 20, true);
+
+    if (userID === "LASF_Spec" && recordID === 4) {
+      let extraByteOffset = 0;  // running byte offset within the extra bytes section
+      for (let d = 0; d + 192 <= recordLen; d += 192) {
+        const descBase = vlrPos + 54 + d;
+        const dataType = dv.getUint8(descBase + 2);
+        let name = "";
+        for (let c = 0; c < 32; c++) {
+          const ch = dv.getUint8(descBase + 4 + c);
+          if (ch === 0) break;
+          name += String.fromCharCode(ch);
+        }
+        if (name === "treeID") {
+          treeIDOffset = stdPointSize + extraByteOffset;
+          break;
+        }
+        extraByteOffset += EXTRA_BYTE_SIZES[dataType] ?? 0;
+      }
+    }
+    vlrPos += 54 + recordLen;
+  }
+
+  // ── Read points ───────────────────────────────────────────────
   const pts = new Array(numPoints);
   let zMin = Infinity, zMax = -Infinity;
 
   for (let i = 0; i < numPoints; i++) {
     const base = offsetToPoints + i * pointRecLen;
-    // X, Y, Z are always the first three int32 fields in every point format
+    // X, Y, Z are always the first three int32 fields in every LAS point format.
+    // XY are geographic (local projected CRS metres); Z is elevation in metres.
+    // No exaggeration is applied here — coordinates are used at their true scale.
     const x = dv.getInt32(base,     true) * xScale + xOff;
     const y = dv.getInt32(base + 4, true) * yScale + yOff;
     const z = dv.getInt32(base + 8, true) * zScale + zOff;
     if (z < zMin) zMin = z;
     if (z > zMax) zMax = z;
-    pts[i] = { position: [x, y, z], z };
+
+    // Read treeID if the extra bytes descriptor was found.
+    // lidR writes treeID as int32; NA_integer_ (-2147483648) means unclassified.
+    let treeID = null;
+    if (treeIDOffset >= 0) {
+      const raw = dv.getInt32(base + treeIDOffset, true);
+      treeID = (raw === -2147483648) ? null : raw;
+    }
+
+    pts[i] = { position: [x, y, z], z, treeID };
   }
 
   return { pts, zMin, zMax };
 }
 
-// Return up to maxCount other 3D-viewable trees whose treetops are within
-// maxDistM metres (local CRS) of the given feature's treetop, sorted nearest-first.
-function nearbyViewableFeatures(feature, maxCount, maxDistM) {
-  const sx  = feature.properties.XTOP ?? 0;
-  const sy  = feature.properties.YTOP ?? 0;
-  const sid = String(feature.properties.treeID);
-  return geojsonData.features
-    .filter(f => {
-      if (String(f.properties?.treeID) === sid) return false;
-      if (!is3DViewable(f.properties?.ZTOP)) return false;
-      const dx = (f.properties.XTOP ?? 0) - sx;
-      const dy = (f.properties.YTOP ?? 0) - sy;
-      return Math.sqrt(dx * dx + dy * dy) <= maxDistM;
-    })
-    .sort((a, b) => {
-      const dxa = (a.properties.XTOP ?? 0) - sx, dya = (a.properties.YTOP ?? 0) - sy;
-      const dxb = (b.properties.XTOP ?? 0) - sx, dyb = (b.properties.YTOP ?? 0) - sy;
-      return (dxa * dxa + dya * dya) - (dxb * dxb + dyb * dyb);
-    })
-    .slice(0, maxCount);
-}
+// Generation counter — increments on each show3D call so that a stale async
+// load (from a previous tree selection) doesn't overwrite a newer one.
+let show3DGeneration = 0;
 
-// Show 3D point cloud for a tree (called from selectTree when tree is viewable)
+// Show 3D point cloud for a tree (called from selectTree when tree is viewable).
+// The per-tree LAS file already includes all points within WEB_POINT_CLOUD_BUFFER_M
+// of the treetop. Points whose treeID extra byte matches the selected tree are
+// coloured viridis by elevation; all other points are rendered grey.
 async function show3D(id) {
+  const generation = ++show3DGeneration;
+
   const feature = geojsonData.features.find(
     f => String(f.properties?.treeID) === String(id)
   );
@@ -640,65 +682,30 @@ async function show3D(id) {
   loadingEl.classList.remove("hidden");
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
-  const url = lasUrl(props.treeID);
-
   try {
-    // Load the selected tree and up to 5 nearby trees in parallel
-    const neighbors = nearbyViewableFeatures(feature, SURROUND_MAX_TREES, SURROUND_MAX_DIST_M);
+    const response = await fetch(lasUrl(props.treeID));
+    if (!response.ok) throw new Error(`HTTP ${response.status} – ${response.statusText}`);
+    const buffer = await response.arrayBuffer();
 
-    const [primaryResult, ...neighborBuffers] = await Promise.all([
-      fetch(url).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} – ${r.statusText}`);
-        return r.arrayBuffer();
-      }),
-      ...neighbors.map(nf =>
-        fetch(lasUrl(nf.properties.treeID))
-          .then(r => {
-            if (!r.ok) {
-              console.warn(`Neighbor tree ${nf.properties.treeID}: HTTP ${r.status}`);
-              return null;
-            }
-            return r.arrayBuffer();
-          })
-          .catch(err => { console.warn(`Neighbor tree ${nf.properties.treeID}: ${err.message}`); return null; })
-      ),
-    ]);
+    // Bail out if the user has already selected a different tree
+    if (generation !== show3DGeneration) return;
 
-    const { pts: rawPts, zMin, zMax } = parseLAS(primaryResult);
+    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
     const n = rawPts.length;
 
-    // Convert selected tree points to WGS84 lon/lat; retain Z
+    // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
+    // XY: geographic 1:1 scale via the affine transform below.
+    // Z:  elevation in metres, used as-is so distances are not distorted.
+    const mainTID = Number(id);
+    const hasTID  = rawPts.some(p => p.treeID !== null);
+
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z };
+      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID };
     });
-
-    // Collect surrounding points (grey) from successfully loaded neighbors
-    const surroundPositions = [];
-    for (const buf of neighborBuffers) {
-      if (!buf) continue;
-      try {
-        const { pts: nRaw } = parseLAS(buf);
-        for (const p of nRaw) {
-          const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-          surroundPositions.push([lon, lat, p.position[2]]);
-        }
-      } catch (_) { /* skip corrupt neighbor file */ }
-    }
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
-
-    const viewState = {
-      longitude: treetopLon,
-      latitude:  treetopLat,
-      zoom:      18,
-      pitch:     60,
-      bearing:   0,
-      transitionDuration: 600,
-    };
-    currentViewState = viewState;
-    treeViewState    = viewState;
 
     // Update deck-legend labels with point cloud Z range
     const dMin = document.getElementById("deck-legend-min");
@@ -706,32 +713,22 @@ async function show3D(id) {
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
-    // Surrounding trees: grey, small points (rendered first / behind)
-    const surroundLayer = surroundPositions.length > 0
-      ? new deck.PointCloudLayer({
-          id:          "surround-cloud",
-          data:        surroundPositions,
-          getPosition: d => d,
-          getColor:    [160, 160, 160, 160],
-          pointSize:   1,
-        })
-      : null;
-
-    // Selected tree: viridis by elevation, slightly larger points (rendered on top)
+    // Single layer: selected tree's points → viridis by elevation; all other
+    // tree IDs in the buffer → grey context points.
     const pointCloudLayer = new deck.PointCloudLayer({
       id:          "point-cloud",
       data:        pts,
       getPosition: d => d.position,
       getColor:    d => {
+        if (hasTID && d.treeID !== null && d.treeID !== mainTID) {
+          return [160, 160, 160, 160]; // surrounding context: grey
+        }
         const t = (d.z - zMin) / zRange;
-        return [...viridisColor(t), 255];
+        return [...viridisColor(t), 255]; // selected tree: viridis by elevation
       },
       pointSize: 2,
+      updateTriggers: { getColor: [mainTID, hasTID, zMin, zMax] },
     });
-
-    const cloudLayers = surroundLayer
-      ? [surroundLayer, pointCloudLayer]
-      : [pointCloudLayer];
 
     const layers = showBasemap
       ? [
@@ -748,15 +745,30 @@ async function show3D(id) {
                 bounds: p.tile.boundingBox.flatMap(c => c),
               }),
           }),
-          ...cloudLayers,
+          pointCloudLayer,
         ]
-      : cloudLayers;
+      : [pointCloudLayer];
+
+    // Fly to the selected tree's treetop. Using FlyToInterpolator ensures
+    // the camera reliably transitions even when the 3D panel is already open
+    // and the view has been manually panned.
+    const viewState = {
+      longitude:             treetopLon,
+      latitude:              treetopLat,
+      zoom:                  18,
+      pitch:                 60,
+      bearing:               0,
+      transitionDuration:    600,
+      transitionInterpolator: new deck.FlyToInterpolator(),
+    };
+    treeViewState = viewState;
 
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
     setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
   } catch (err) {
+    if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
     console.error("LAS load error:", err);
     setStatus(`⚠ Point cloud unavailable for tree ${props.treeID}`);
