@@ -7,7 +7,7 @@
 const PICTOMETRY_URL =
   "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}";
 const CROWNS_GEOJSON  = "data/vector/crowns.geojson";
-// Default map center: Lafayette Hoover Hawes (LHH) area, SF
+// Default map center: Laguna Honda Hospital (LHH) area, SF
 const DEFAULT_CENTER  = [37.7335, -122.4400];
 const DEFAULT_ZOOM    = 18;
 // Scale factor applied to ZTOP (meters) for 3D extrusion height.
