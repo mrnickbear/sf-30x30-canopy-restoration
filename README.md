@@ -2,8 +2,9 @@
 
 LiDAR processing pipeline using lidR to drive biodiversity restoration across
 San Francisco's central open spaces. Combines 3D metric extraction and ML to
-map invasive ivy, blackberry thickets, and senescent eucalyptus—optimizing
-field interventions for California's 30×30 grant goals.
+map invasive ivy, blackberry thickets, and senescent eucalyptus.  The output
+will support field interventions for California's 30×30 grant goals of conserving
+at least 30% of the state land and coastal waters by 2030
 
 ---
 
