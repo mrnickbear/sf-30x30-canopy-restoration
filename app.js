@@ -66,16 +66,18 @@ function localToLngLat(x, y) {
   ];
 }
 
-// Zero-pad width mirrors 04_pointcloud_web_prep.R (max digits of viewable treeIDs)
+// Zero-pad width mirrors 04_pointcloud_web_prep.R (max digits of viewable treeIDs).
+// Computed once after geojsonData is loaded; cached in _lazPad.
+let _lazPad = 0;
 function lazPadWidth() {
+  if (_lazPad) return _lazPad;
   if (!geojsonData) return 2;
-  let max = 0;
   for (const f of geojsonData.features) {
     if (is3DViewable(f.properties?.ZTOP)) {
-      max = Math.max(max, String(f.properties.treeID ?? "").length);
+      _lazPad = Math.max(_lazPad, String(f.properties.treeID ?? "").length);
     }
   }
-  return max || 2;
+  return _lazPad || 2;
 }
 
 function lazUrl(treeID) {
@@ -505,9 +507,10 @@ const DECK_DEFAULT_VIEW = {
   bearing:    0,
 };
 
-let deckInitialized = false;
-let currentViewState  = { ...DECK_DEFAULT_VIEW };
-let treeViewState     = { ...DECK_DEFAULT_VIEW }; // initial view for the selected tree
+let deckInitialized  = false;
+let deckHasLayers    = false;   // true once a point cloud has been rendered
+let currentViewState = { ...DECK_DEFAULT_VIEW };
+let treeViewState    = { ...DECK_DEFAULT_VIEW }; // initial view for the selected tree
 
 function initDeckGL() {
   if (deckInitialized) return;
@@ -537,10 +540,7 @@ function initDeckGL() {
 
   document.getElementById("btn-toggle-basemap").addEventListener("click", () => {
     showBasemap = !showBasemap;
-    if (deckGL._props.layers && deckGL._props.layers.length) {
-      // Re-run show3D for the current selected tree to refresh layers with/without basemap
-      if (selectedId) show3D(selectedId);
-    }
+    if (deckHasLayers && selectedId) show3D(selectedId);
   });
 }
 
@@ -604,14 +604,10 @@ async function show3D(id) {
     treeViewState    = viewState;
 
     // Update deck-legend labels with point cloud Z range
-    ["deck-legend-min"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = zMin.toFixed(1) + " m";
-    });
-    ["deck-legend-max"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = zMax.toFixed(1) + " m";
-    });
+    const dMin = document.getElementById("deck-legend-min");
+    const dMax = document.getElementById("deck-legend-max");
+    if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
+    if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
     const pointCloudLayer = new deck.PointCloudLayer({
       id:          "point-cloud",
@@ -644,6 +640,7 @@ async function show3D(id) {
       : [pointCloudLayer];
 
     deckGL.setProps({ initialViewState: viewState, layers });
+    deckHasLayers = true;
     loadingEl.classList.add("hidden");
     setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
   } catch (err) {
