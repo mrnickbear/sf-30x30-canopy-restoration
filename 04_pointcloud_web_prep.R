@@ -39,6 +39,12 @@ if (length(missing_columns) > 0) {
        paste(missing_columns, collapse = ", "))
 }
 
+tree_ids <- suppressWarnings(as.integer(crowns$treeID))
+if (anyNA(tree_ids)) {
+  stop("Crowns treeID values must be integer-like.")
+}
+crowns$treeID <- tree_ids
+
 tall_crowns <- crowns[crowns$ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M, ]
 if (nrow(tall_crowns) == 0) {
   stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
@@ -53,7 +59,7 @@ tree_points <- st_sf(
       tall_crowns$XTOP,
       tall_crowns$YTOP
     ),
-    crs = cs13_m
+    crs = 7131
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
@@ -68,7 +74,7 @@ id_width <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
 
 for (i in seq_len(nrow(clip_windows))) {
-  tree_id <- as.integer(clip_windows$treeID[i])
+  tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
     sprintf(paste0("tree_%0", id_width, "d.laz"), tree_id)
