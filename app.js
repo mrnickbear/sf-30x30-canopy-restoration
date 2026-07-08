@@ -243,8 +243,8 @@ function leafletStyle(feature) {
   return {
     fillColor:   `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
     fillOpacity: isSnag ? 0.7 : 0.55,
-    color:       isSnag ? "#f85149" : isViewable ? "#d29922" : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
-    weight:      isSnag ? 2.0 : isViewable ? 2.0 : 0.8,
+    color:       isSnag ? "#f85149" : isViewable ? "#7c2d12" : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
+    weight:      isSnag ? 2.0 : isViewable ? 2.5 : 0.8,
     opacity:     1,
   };
 }
@@ -594,6 +594,28 @@ function parseLAS(buffer) {
   return { pts, zMin, zMax };
 }
 
+// Return up to maxCount other 3D-viewable trees whose treetops are within
+// maxDistM metres (local CRS) of the given feature's treetop, sorted nearest-first.
+function nearbyViewableFeatures(feature, maxCount, maxDistM) {
+  const sx  = feature.properties.XTOP ?? 0;
+  const sy  = feature.properties.YTOP ?? 0;
+  const sid = String(feature.properties.treeID);
+  return geojsonData.features
+    .filter(f => {
+      if (String(f.properties?.treeID) === sid) return false;
+      if (!is3DViewable(f.properties?.ZTOP)) return false;
+      const dx = (f.properties.XTOP ?? 0) - sx;
+      const dy = (f.properties.YTOP ?? 0) - sy;
+      return Math.sqrt(dx * dx + dy * dy) <= maxDistM;
+    })
+    .sort((a, b) => {
+      const dxa = (a.properties.XTOP ?? 0) - sx, dya = (a.properties.YTOP ?? 0) - sy;
+      const dxb = (b.properties.XTOP ?? 0) - sx, dyb = (b.properties.YTOP ?? 0) - sy;
+      return (dxa * dxa + dya * dya) - (dxb * dxb + dyb * dyb);
+    })
+    .slice(0, maxCount);
+}
+
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable)
 async function show3D(id) {
   const feature = geojsonData.features.find(
@@ -617,18 +639,42 @@ async function show3D(id) {
   const url = lasUrl(props.treeID);
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status} – ${response.statusText}`);
-    const buffer = await response.arrayBuffer();
+    // Load the selected tree and up to 5 nearby trees in parallel
+    const neighbors = nearbyViewableFeatures(feature, 5, 100);
 
-    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
+    const [primaryResult, ...neighborBuffers] = await Promise.all([
+      fetch(url).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} – ${r.statusText}`);
+        return r.arrayBuffer();
+      }),
+      ...neighbors.map(nf =>
+        fetch(lasUrl(nf.properties.treeID))
+          .then(r => r.ok ? r.arrayBuffer() : null)
+          .catch(() => null)
+      ),
+    ]);
+
+    const { pts: rawPts, zMin, zMax } = parseLAS(primaryResult);
     const n = rawPts.length;
 
-    // Convert local CRS XY → WGS84 lon/lat; retain Z (height above ground, metres)
+    // Convert selected tree points to WGS84 lon/lat; retain Z
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
       return { position: [lon, lat, p.position[2]], z: p.z };
     });
+
+    // Collect surrounding points (grey) from successfully loaded neighbors
+    const surroundPositions = [];
+    for (const buf of neighborBuffers) {
+      if (!buf) continue;
+      try {
+        const { pts: nRaw } = parseLAS(buf);
+        for (const p of nRaw) {
+          const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+          surroundPositions.push([lon, lat, p.position[2]]);
+        }
+      } catch (_) { /* skip corrupt neighbor file */ }
+    }
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
@@ -650,6 +696,18 @@ async function show3D(id) {
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
+    // Surrounding trees: grey, small points (rendered first / behind)
+    const surroundLayer = surroundPositions.length > 0
+      ? new deck.PointCloudLayer({
+          id:          "surround-cloud",
+          data:        surroundPositions,
+          getPosition: d => d,
+          getColor:    [160, 160, 160, 160],
+          pointSize:   1,
+        })
+      : null;
+
+    // Selected tree: viridis by elevation, slightly larger points (rendered on top)
     const pointCloudLayer = new deck.PointCloudLayer({
       id:          "point-cloud",
       data:        pts,
@@ -658,8 +716,12 @@ async function show3D(id) {
         const t = (d.z - zMin) / zRange;
         return [...viridisColor(t), 255];
       },
-      pointSize: 3,
+      pointSize: 2,
     });
+
+    const cloudLayers = surroundLayer
+      ? [surroundLayer, pointCloudLayer]
+      : [pointCloudLayer];
 
     const layers = showBasemap
       ? [
@@ -676,9 +738,9 @@ async function show3D(id) {
                 bounds: p.tile.boundingBox.flatMap(c => c),
               }),
           }),
-          pointCloudLayer,
+          ...cloudLayers,
         ]
-      : [pointCloudLayer];
+      : cloudLayers;
 
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
