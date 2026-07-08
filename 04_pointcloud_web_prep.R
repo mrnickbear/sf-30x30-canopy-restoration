@@ -19,7 +19,7 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
 
 if (!file.exists(CROWNS_GEOJSON_PATH)) {
   stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
-       ". Run 03_visualize.R first.")
+       ". Create or copy the Phase 3 crown export to this path first.")
 }
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
@@ -72,14 +72,14 @@ if (length(existing_outputs) > 0) {
   file.remove(existing_outputs)
 }
 
-id_width <- max(nchar(as.character(clip_windows$treeID)))
+tree_id_width <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", id_width, "d.laz"), tree_id)
+    sprintf(paste0("tree_%0", tree_id_width, "d.laz"), tree_id)
   )
 
   clipped_las <- clip_roi(seg_snags, clip_windows[i, ])

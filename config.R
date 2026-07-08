@@ -59,7 +59,8 @@ MAX_8BIT_INTENSITY <- 255L
 PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}"
 
 # ---- Web point cloud prep ----
-# Keep these separate even though both currently default to 30 m.
+# Keep these separate even though both currently default to 30 m:
+# MIN_HEIGHT_M filters which trees are exported, BUFFER_M controls clip extent.
 WEB_POINT_CLOUD_MIN_HEIGHT_M <- 30
 WEB_POINT_CLOUD_BUFFER_M <- 30
 WEB_POINT_CLOUD_CRS <- 7131
