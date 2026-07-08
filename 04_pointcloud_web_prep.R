@@ -6,7 +6,8 @@
 # per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
 # points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
 # WEB_POINT_CLOUD_DIR as an individual uncompressed .las file (no WASM/CDN
-# decompressor required in the browser).
+# decompressor required in the browser). Note: uncompressed LAS files are
+# larger than LAZ; typical per-tree exports for this dataset are < 5 MB.
 
 source("config.R")
 

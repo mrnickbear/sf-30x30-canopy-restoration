@@ -547,38 +547,42 @@ function initDeckGL() {
 // ── Native binary LAS parser (no CDN / no WASM required) ─────
 // Supports LAS 1.0–1.4; reads X/Y/Z from the first 12 bytes of each point
 // record (all point formats store scaled-integer X, Y, Z at the same offsets).
+// Header field offsets follow the LAS 1.4 spec (ASPRS LAS Specification 1.4-R15).
 function parseLAS(buffer) {
   const dv = new DataView(buffer);
 
-  // Validate "LASF" file signature
+  // Validate "LASF" file signature (offsets 0–3)
   const sig = String.fromCharCode(
     dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)
   );
   if (sig !== "LASF") throw new Error("Not a valid LAS file (bad signature)");
 
-  const vMinor          = dv.getUint8(25);
-  const offsetToPoints  = dv.getUint32(96,  true);
-  const pointRecLen     = dv.getUint16(105, true);
-  // legacy 32-bit count (always populated for LAS ≤ 1.3; may be 0 for LAS 1.4)
-  let   numPoints       = dv.getUint32(107, true);
+  const vMinor         = dv.getUint8(25);          // offset 25: version minor
+  const offsetToPoints = dv.getUint32(96,  true);  // offset 96:  offset to point data
+  const pointRecLen    = dv.getUint16(105, true);  // offset 105: point data record length
+  // offset 107: legacy 32-bit point count (always valid for LAS ≤ 1.3; may be 0 for LAS 1.4)
+  let numPoints = dv.getUint32(107, true);
 
-  // LAS 1.4 stores the authoritative 64-bit count at offset 247
+  // LAS 1.4 stores the authoritative 64-bit count at offset 247; use BigInt to avoid
+  // silent truncation of files with more than 2^32 – 1 points.
   if (vMinor >= 4 && numPoints === 0) {
-    numPoints = dv.getUint32(247, true); // low 32 bits sufficient for web exports
+    numPoints = Number(dv.getBigUint64(247, true));
   }
 
-  const xScale = dv.getFloat64(131, true);
-  const yScale = dv.getFloat64(139, true);
-  const zScale = dv.getFloat64(147, true);
-  const xOff   = dv.getFloat64(155, true);
-  const yOff   = dv.getFloat64(163, true);
-  const zOff   = dv.getFloat64(171, true);
+  // Scale factors and offsets for coordinate de-quantisation (offsets 131–178)
+  const xScale = dv.getFloat64(131, true);  // offset 131: X scale factor
+  const yScale = dv.getFloat64(139, true);  // offset 139: Y scale factor
+  const zScale = dv.getFloat64(147, true);  // offset 147: Z scale factor
+  const xOff   = dv.getFloat64(155, true);  // offset 155: X offset
+  const yOff   = dv.getFloat64(163, true);  // offset 163: Y offset
+  const zOff   = dv.getFloat64(171, true);  // offset 171: Z offset
 
   const pts = new Array(numPoints);
   let zMin = Infinity, zMax = -Infinity;
 
   for (let i = 0; i < numPoints; i++) {
     const base = offsetToPoints + i * pointRecLen;
+    // X, Y, Z are always the first three int32 fields in every point format
     const x = dv.getInt32(base,     true) * xScale + xOff;
     const y = dv.getInt32(base + 4, true) * yScale + yOff;
     const z = dv.getInt32(base + 8, true) * zScale + zOff;
