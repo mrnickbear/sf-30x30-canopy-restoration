@@ -262,13 +262,12 @@ let geojsonLayer = null;
 
 function leafletStyle(feature) {
   const rgb = featureColor(feature);
-  const isSnag     = (feature.properties?.snagCls ?? 0) > 0;
   const isViewable = is3DViewable(feature.properties?.ZTOP);
   return {
     fillColor:   `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
-    fillOpacity: isSnag ? 0.7 : 0.55,
-    color:       isSnag ? "#f85149" : isViewable ? "#7c2d12" : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
-    weight:      isSnag ? 2.0 : isViewable ? 2.5 : 0.8,
+    fillOpacity: 0.55,
+    color:       isViewable ? "#7c2d12" : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
+    weight:      isViewable ? 2.5 : 0.8,
     opacity:     1,
   };
 }
