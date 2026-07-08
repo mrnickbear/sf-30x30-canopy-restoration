@@ -535,7 +535,7 @@ const DECK_DEFAULT_VIEW = {
   longitude: DEFAULT_CENTER[1],
   latitude:  DEFAULT_CENTER[0],
   zoom:       18,
-  pitch:      60,
+  pitch:       0,
   bearing:    0,
 };
 
@@ -787,7 +787,7 @@ async function show3D(id) {
       longitude:             treetopLon,
       latitude:              treetopLat,
       zoom:                  18,
-      pitch:                 60,
+      pitch:                  0,
       bearing:               0,
       transitionDuration:    600,
       transitionInterpolator: new deck.FlyToInterpolator(),
