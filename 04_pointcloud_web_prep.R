@@ -45,7 +45,10 @@ if (anyNA(tree_ids)) {
 }
 crowns$treeID <- tree_ids
 
-crowns_above_threshold <- crowns[crowns$ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M, ]
+crowns_above_threshold <- subset(
+  crowns,
+  ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M
+)
 if (nrow(crowns_above_threshold) == 0) {
   stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
        " m in ", CROWNS_GEOJSON_PATH)
@@ -63,6 +66,9 @@ tree_points <- st_sf(
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
+if (nrow(clip_windows) == 0) {
+  stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
+}
 
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
 existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
