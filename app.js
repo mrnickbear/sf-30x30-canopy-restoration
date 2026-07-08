@@ -124,22 +124,50 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
 // ══════════════════════════════════════════════════════════════
 async function init() {
   setStatus("Fetching crowns.geojson…");
+
+  // Browsers block fetch() on file:// — must be served over HTTP.
+  if (location.protocol === "file:") {
+    const hint = document.createElement("span");
+    hint.textContent = "⚠ Could not load crowns.geojson: open via a local server — e.g. ";
+    const code = document.createElement("code");
+    code.textContent = "python -m http.server 8080";
+    const link = document.createElement("a");
+    link.href = "http://localhost:8080";
+    link.target = "_blank";
+    link.textContent = "http://localhost:8080";
+    hint.appendChild(code);
+    hint.appendChild(document.createTextNode(" then visit "));
+    hint.appendChild(link);
+    const statusEl = document.getElementById("status-msg");
+    statusEl.textContent = "";
+    statusEl.appendChild(hint);
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "loading-cell";
+    cell.appendChild(hint.cloneNode(true));
+    const tr = document.createElement("tr");
+    tr.appendChild(cell);
+    const tbody = document.getElementById("table-body");
+    tbody.textContent = "";
+    tbody.appendChild(tr);
+    return;
+  }
+
   try {
-    if (location.protocol === "file:") {
-      throw new Error(
-        'Browsers block local file fetches — serve the project over HTTP instead. ' +
-        'Run: <code>python -m http.server 8080</code> then open ' +
-        '<a href="http://localhost:8080" target="_blank">http://localhost:8080</a>'
-      );
-    }
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
   } catch (err) {
-    const html = err.message;
-    document.getElementById("status-msg").innerHTML = `⚠ Could not load crowns.geojson: ${html}`;
-    document.getElementById("table-body").innerHTML =
-      `<tr><td colspan="5" class="loading-cell">⚠ ${html}</td></tr>`;
+    setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "loading-cell";
+    cell.textContent = `⚠ ${err.message}`;
+    const tr = document.createElement("tr");
+    tr.appendChild(cell);
+    const tbody = document.getElementById("table-body");
+    tbody.textContent = "";
+    tbody.appendChild(tr);
     return;
   }
 
