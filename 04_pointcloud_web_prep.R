@@ -62,7 +62,7 @@ tree_points <- st_sf(
       crowns_above_threshold$XTOP,
       crowns_above_threshold$YTOP
     ),
-    crs = WEB_POINT_CLOUD_CRS
+    crs = st_crs(seg_snags)
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)

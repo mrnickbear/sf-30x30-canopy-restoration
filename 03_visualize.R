@@ -24,6 +24,12 @@ library(leaflet)
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
 seg_snags <- readALSLAS(OUTPUT_LAS_PATH, filter = "-drop_z_below 10")
 
+# # ---- Require seg_snags in memory ----
+# if (!exists("seg_snags")) {
+#   stop("'seg_snags' is not in memory. Run 02_segment.R first, ",
+#        "or set RUN_LOAD_DATA = TRUE in run_pipeline.R.")
+# }
+
 # ---- Crown metrics ----
 message("Computing crown metrics...")
 metrics <- crown_metrics(las = seg_snags, func = .stdtreemetrics)

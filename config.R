@@ -13,8 +13,11 @@ LIDAR_CATALOG_PATH <- "data/raw_point_clouds/tilecls/"
 # Path for the segmented output LAS (written by 02_segment.R, read by 03_visualize.R)
 OUTPUT_LAS_PATH <- "data/raw_point_clouds/LHH_aa_z3segssnags.las"
 
-# Phase 3 crown polygons used to prepare browser-sized point clouds in 04_pointcloud_web_prep.R
+# Phase 3 
+#crown polygons used to prepare browser-sized point clouds in 04_pointcloud_web_prep.R
 CROWNS_GEOJSON_PATH <- "data/vector/crowns.geojson"
+#treetops used to prepare browser-sized point clouds in 04_pointcloud_web_prep.R
+TREETOPS_GEOJSON_PATH <- "data/vector/treetops.geojson"
 
 # Directory for per-tree web-ready LAZ exports written by 04_pointcloud_web_prep.R
 WEB_POINT_CLOUD_DIR <- "data/web_point_clouds"
@@ -62,6 +65,6 @@ PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictom
 # Keep these separate even though both currently default to 30 m:
 # MIN_HEIGHT_M filters which trees are exported, BUFFER_M controls clip extent.
 # They may diverge later if shorter trees are exported with the same clip radius.
-WEB_POINT_CLOUD_MIN_HEIGHT_M <- 30
+WEB_POINT_CLOUD_MIN_HEIGHT_M <- 42.5
 WEB_POINT_CLOUD_BUFFER_M <- 30
 WEB_POINT_CLOUD_CRS <- 7131
