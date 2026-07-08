@@ -45,11 +45,16 @@ if (nrow(tall_crowns) == 0) {
        " m in ", CROWNS_GEOJSON_PATH)
 }
 
-tree_points <- st_as_sf(
+tree_points <- st_sf(
   tall_crowns,
-  coords = c("XTOP", "YTOP"),
-  crs = cs13_m,
-  remove = FALSE
+  geometry = st_sfc(
+    Map(
+      function(x, y) st_point(c(x, y)),
+      tall_crowns$XTOP,
+      tall_crowns$YTOP
+    ),
+    crs = cs13_m
+  )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
 
@@ -59,7 +64,7 @@ if (length(existing_outputs) > 0) {
   file.remove(existing_outputs)
 }
 
-id_width <- max(nchar(as.character(as.integer(clip_windows$treeID))))
+id_width <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
 
 for (i in seq_len(nrow(clip_windows))) {
