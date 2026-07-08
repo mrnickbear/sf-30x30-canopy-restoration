@@ -15,6 +15,10 @@ const DEFAULT_ZOOM    = 18;
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 
+// Surrounding-tree context in 3D view
+const SURROUND_MAX_TREES   = 5;    // max number of nearby trees to load as grey context
+const SURROUND_MAX_DIST_M  = 100;  // local CRS metres — treetop-to-treetop search radius
+
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
 // lon = LON_A*X + LON_B*Y + LON_C
@@ -640,7 +644,7 @@ async function show3D(id) {
 
   try {
     // Load the selected tree and up to 5 nearby trees in parallel
-    const neighbors = nearbyViewableFeatures(feature, 5, 100);
+    const neighbors = nearbyViewableFeatures(feature, SURROUND_MAX_TREES, SURROUND_MAX_DIST_M);
 
     const [primaryResult, ...neighborBuffers] = await Promise.all([
       fetch(url).then(r => {
@@ -649,8 +653,14 @@ async function show3D(id) {
       }),
       ...neighbors.map(nf =>
         fetch(lasUrl(nf.properties.treeID))
-          .then(r => r.ok ? r.arrayBuffer() : null)
-          .catch(() => null)
+          .then(r => {
+            if (!r.ok) {
+              console.warn(`Neighbor tree ${nf.properties.treeID}: HTTP ${r.status}`);
+              return null;
+            }
+            return r.arrayBuffer();
+          })
+          .catch(err => { console.warn(`Neighbor tree ${nf.properties.treeID}: ${err.message}`); return null; })
       ),
     ]);
 
