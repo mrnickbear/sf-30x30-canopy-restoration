@@ -45,19 +45,19 @@ if (anyNA(tree_ids)) {
 }
 crowns$treeID <- tree_ids
 
-tall_crowns <- crowns[crowns$ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M, ]
-if (nrow(tall_crowns) == 0) {
+crowns_above_threshold <- crowns[crowns$ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M, ]
+if (nrow(crowns_above_threshold) == 0) {
   stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
        " m in ", CROWNS_GEOJSON_PATH)
 }
 
 tree_points <- st_sf(
-  tall_crowns,
+  crowns_above_threshold,
   geometry = st_sfc(
     Map(
       function(x, y) st_point(c(x, y)),
-      tall_crowns$XTOP,
-      tall_crowns$YTOP
+      crowns_above_threshold$XTOP,
+      crowns_above_threshold$YTOP
     ),
     crs = WEB_POINT_CLOUD_CRS
   )
@@ -72,14 +72,14 @@ if (length(existing_outputs) > 0) {
   file.remove(existing_outputs)
 }
 
-tree_id_width <- max(nchar(as.character(clip_windows$treeID)))
+max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", tree_id_width, "d.laz"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d.laz"), tree_id)
   )
 
   clipped_las <- clip_roi(seg_snags, clip_windows[i, ])
