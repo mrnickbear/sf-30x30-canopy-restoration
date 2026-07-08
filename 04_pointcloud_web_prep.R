@@ -59,7 +59,7 @@ tree_points <- st_sf(
       tall_crowns$XTOP,
       tall_crowns$YTOP
     ),
-    crs = 7131
+    crs = 7131  # CA State Plane Zone 3, meters
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
@@ -67,6 +67,8 @@ clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
 existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
 if (length(existing_outputs) > 0) {
+  message("Removing ", length(existing_outputs),
+          " existing LAZ file(s) from: ", WEB_POINT_CLOUD_DIR)
   file.remove(existing_outputs)
 }
 
