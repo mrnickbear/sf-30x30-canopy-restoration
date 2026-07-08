@@ -1,16 +1,19 @@
 # 04_pointcloud_web_prep.R
-# Step 4: Export per-tree web-ready LAZ files for tall trees.
+# Step 4: Export per-tree web-ready LAS files for tall trees.
 #
 # Reads the normalized + segmented LAS from OUTPUT_LAS_PATH and the Phase 3
 # crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
 # per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
 # points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
-# WEB_POINT_CLOUD_DIR as an individual .laz file.
+# WEB_POINT_CLOUD_DIR as an individual uncompressed .las file (no WASM/CDN
+# decompressor required in the browser). Note: uncompressed LAS files are
+# larger than LAZ; typical per-tree exports for this dataset are < 5 MB.
 
 source("config.R")
 
 library(lidR)
 library(sf)
+library(jsonlite)
 
 if (!file.exists(OUTPUT_LAS_PATH)) {
   stop("Segmented LAS not found at: ", OUTPUT_LAS_PATH,
@@ -71,21 +74,24 @@ if (nrow(clip_windows) == 0) {
 }
 
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
-existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
+existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.las"))
 if (length(existing_outputs) > 0) {
   message("Removing ", length(existing_outputs),
-          " existing LAZ file(s) from: ", WEB_POINT_CLOUD_DIR)
+          " existing LAS file(s) from: ", WEB_POINT_CLOUD_DIR)
   file.remove(existing_outputs)
 }
 
 max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
+# Maps crown treeID (character) -> LAS segment treeID (integer)
+# Written to crown_las_map.json so app.js can colour the correct tree.
+crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.laz"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
   )
 
   clipped_las <- clip_roi(seg_snags, clip_windows[i, ])
@@ -94,12 +100,33 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
+  # The treeID attribute in the LAS is assigned by segment_trees() and may not
+  # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
+  # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
+  # highlight the correct segment.
+  if ("treeID" %in% names(clipped_las@data)) {
+    xtop <- clip_windows$XTOP[i]
+    ytop <- clip_windows$YTOP[i]
+    # Squared distances avoid sqrt; which.min needs only relative ordering.
+    dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
+    nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
+    if (!is.na(nearest_tid)) {
+      crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
+    }
+  }
+
   writeLAS(clipped_las, output_path, index = FALSE)
   written <- written + 1L
   message("Wrote ", output_path)
 }
 
+# Write the crown → LAS treeID mapping alongside the per-tree LAS files.
+# app.js loads this at startup to resolve which LAS treeID to highlight.
+map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
+writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
+message("Wrote crown_las_map.json to: ", map_path)
+
 message(
-  "Web point cloud prep complete. Wrote ", written, " LAZ file(s) to: ",
+  "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
   WEB_POINT_CLOUD_DIR
 )

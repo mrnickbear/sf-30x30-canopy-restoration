@@ -19,7 +19,7 @@ Run them in order, or use `run_pipeline.R` to execute all steps at once.
 | `01_load_data.R` | Load the LiDAR catalog (`data/raw_point_clouds/`) and clip to the analysis area. |
 | `02_segment.R` | Normalize heights, detect tree tops, segment trees, classify snags, and **save** the result to `data/raw_point_clouds/LHH_aa_z3segssnags.las`. |
 | `03_visualize.R` | Load the saved LAS, compute crown metrics, and display an interactive map on the SF Pictometry 2024 aerial. |
-| `04_pointcloud_web_prep.R` | Use `data/vector/crowns.geojson` to export one buffered `.laz` per tree taller than 30 m into `data/web_point_clouds/`. |
+| `04_pointcloud_web_prep.R` | Use `data/vector/crowns.geojson` to export one buffered uncompressed `.las` per tree taller than 30 m into `data/web_point_clouds/`. |
 | `run_pipeline.R` | Master runner – sources each step in order with configurable flags. |
 | `LHHtrees2023/app.R` | Shiny app for interactive exploration; can be deployed to shinyapps.io. |
 
@@ -41,7 +41,7 @@ You can also run individual steps directly:
 source("01_load_data.R")   # populates `las` in memory
 source("02_segment.R")     # uses `las`; saves result to disk
 source("03_visualize.R")   # reads from disk; opens interactive map
-source("04_pointcloud_web_prep.R")  # writes per-tree LAZ files for the web
+source("04_pointcloud_web_prep.R")  # writes per-tree LAS files for the web
 ```
 
 ### Test area vs. full area
@@ -50,6 +50,29 @@ Edit `USE_CUSTOM_CIRCLE` in `config.R`:
 
 - `FALSE` (default) – full LHH analysis area from `data/vector/updatedAA.kml` (~134,000 m²)
 - `TRUE` – small DLT_040 test circle (r = 40 m, ~5,000 m²); faster for testing
+
+---
+
+## Web dashboard
+
+`index.html` is a static Leaflet + Deck.gl dashboard that reads
+`data/vector/crowns.geojson` at runtime.  Because browsers block
+`fetch()` on `file://` URLs you must serve the project over HTTP — even
+locally.
+
+**Quickest way (Python 3, no extra install):**
+
+```bash
+python -m http.server 8080
+# then open http://localhost:8080 in your browser
+```
+
+**Or with R's `servr` package:**
+
+```r
+# install.packages("servr")   # first time only
+servr::httd(port = 8080)
+```
 
 ---
 

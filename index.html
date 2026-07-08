@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SF 30×30 Canopy Restoration – LHH Tree Dashboard</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Deck.gl standalone bundle -->
+  <script src="https://unpkg.com/deck.gl@8.9.35/dist.min.js"></script>
+
+  <!-- Dashboard styles -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header class="site-header">
+    <div class="header-title">
+      <span class="header-icon">🌳</span>
+      <span>SF 30×30 Canopy Restoration — LHH Tree Dashboard</span>
+    </div>
+    <div class="header-meta">
+      <span id="crown-count">Loading…</span>
+      <span class="sep">|</span>
+      <span>Pictometry 2024 aerial</span>
+    </div>
+  </header>
+
+  <!-- ── Tab bar ── -->
+  <nav class="tab-bar" role="tablist">
+    <button class="tab-btn active" role="tab" aria-selected="true"
+            data-panel="panel-2d" id="tab-2d">
+      🗺 2D Map &amp; Table
+    </button>
+  </nav>
+
+  <!-- ── Main panel ── -->
+  <section id="panel-2d" class="panel active" role="tabpanel" aria-labelledby="tab-2d">
+    <div class="split-pane">
+
+      <!-- left: Leaflet map / 3D point cloud (shared pane) -->
+      <div class="map-wrap">
+        <!-- 2D Leaflet map (default) -->
+        <div id="map"></div>
+
+        <!-- 3D point cloud view (shown when a viewable tree is selected) -->
+        <div id="deck-container" class="hidden">
+          <canvas id="deck-canvas"></canvas>
+          <div id="deck-tooltip" class="deck-tooltip hidden"></div>
+          <div id="deck-loading" class="deck-loading">Loading point cloud…</div>
+          <div class="deck-controls">
+            <button id="btn-back-to-map" title="Return to 2D map">← Map</button>
+            <button id="btn-reset-view" title="Reset camera">⌂ Reset</button>
+            <button id="btn-toggle-basemap" title="Toggle basemap">🗺 Basemap</button>
+          </div>
+          <div class="deck-legend">
+            <div class="legend-title">Height (m) — point cloud</div>
+            <canvas id="deck-legend-canvas" width="160" height="16"></canvas>
+            <div class="legend-labels">
+              <span id="deck-legend-min">—</span>
+              <span id="deck-legend-max">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="map-legend" id="map-legend">
+          <div class="legend-title">Height (m)</div>
+          <canvas id="legend-canvas" width="160" height="16"></canvas>
+          <div class="legend-labels">
+            <span id="legend-min">—</span>
+            <span id="legend-max">—</span>
+          </div>
+          <div class="legend-snag">
+            <span class="snag-swatch"></span> Snag / end-of-life
+          </div>
+          <div class="legend-snag">
+            <span class="viewable-swatch"></span> 3D point cloud available
+          </div>
+        </div>
+      </div>
+
+      <!-- right: data table -->
+      <div class="table-wrap">
+        <div class="table-toolbar">
+          <input type="search" id="table-search" placeholder="Search tree ID…"
+                 aria-label="Search tree ID" />
+          <span id="table-count" class="table-count"></span>
+        </div>
+        <div class="table-scroll">
+          <table id="crown-table" aria-label="Tree crown metrics">
+            <thead>
+              <tr>
+                <th data-col="treeID"  class="sortable">Tree ID</th>
+                <th data-col="ZTOP"    class="sortable">Height (m)</th>
+                <th data-col="snagCls" class="sortable">Snag class</th>
+                <th data-col="lat"     class="sortable">Lat</th>
+                <th data-col="lng"     class="sortable">Lng</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="5" class="loading-cell">Loading crowns…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- .split-pane -->
+  </section>
+
+  <!-- ── Status bar ── -->
+  <footer class="status-bar">
+    <span id="status-msg">Ready.</span>
+    <span class="sep">|</span>
+    <span>Data: <code>data/vector/crowns.geojson</code></span>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
