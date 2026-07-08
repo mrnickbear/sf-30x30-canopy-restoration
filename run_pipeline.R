@@ -11,6 +11,8 @@
 #   Step 2  02_segment.R    – Normalize heights, segment trees, classify snags,
 #                             save to OUTPUT_LAS_PATH.  Slow – skip when done.
 #   Step 3  03_visualize.R  – Load saved results, compute metrics, show map.
+#   Step 4  04_pointcloud_web_prep.R – Export buffered per-tree LAZ files for
+#                                      trees taller than 30 m.
 #
 # Usage:
 #   Open RStudio, set the working directory to the project root, then:
@@ -19,6 +21,7 @@
 #     source("01_load_data.R")
 #     source("02_segment.R")
 #     source("03_visualize.R")
+#     source("04_pointcloud_web_prep.R")
 
 # ---- Configuration ----
 # Clear the global environment, then load shared settings.
@@ -38,6 +41,7 @@ FORCE_SEGMENT  <- FALSE
 RUN_LOAD_DATA  <- TRUE
 RUN_SEGMENT    <- FORCE_SEGMENT || !file.exists(OUTPUT_LAS_PATH)
 RUN_VISUALIZE  <- TRUE
+RUN_WEB_PREP   <- TRUE
 
 # ---- Step 1: Load data ----
 if (RUN_LOAD_DATA) {
@@ -62,6 +66,12 @@ if (RUN_SEGMENT) {
 if (RUN_VISUALIZE) {
   message("\n=== Step 3: Visualize ===")
   source("03_visualize.R")
+}
+
+# ---- Step 4: Web point cloud prep ----
+if (RUN_WEB_PREP) {
+  message("\n=== Step 4: Web point cloud prep ===")
+  source("04_pointcloud_web_prep.R")
 }
 
 message("\nPipeline complete.")

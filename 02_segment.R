@@ -43,7 +43,7 @@ plot(chm, col = height.colors(50), main = "Canopy Height Model (normalized)")
 
 # ---- Tree top detection ----
 message("Detecting tree tops (lmf, ws = ", TREE_DETECTION_WS, ")...")
-ttops <- locate_trees(nlas, lmf(ws = TREE_DETECTION_WS))
+ttops <- locate_trees(nlas, lmf(ws = TREE_DETECTION_WS)) %>% st_set_crs(cs13_m)
 plot(chm, col = height.colors(50), main = "Detected tree tops")
 plot(sf::st_geometry(ttops), add = TRUE, pch = 3)
 

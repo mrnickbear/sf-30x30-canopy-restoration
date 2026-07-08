@@ -9,7 +9,7 @@ field interventions for California's 30×30 grant goals.
 
 ## Pipeline overview
 
-The analysis is split into three numbered scripts plus a shared config file.
+The analysis is split into four numbered scripts plus a shared config file.
 Run them in order, or use `run_pipeline.R` to execute all steps at once.
 
 | Script | Purpose |
@@ -18,6 +18,7 @@ Run them in order, or use `run_pipeline.R` to execute all steps at once.
 | `01_load_data.R` | Load the LiDAR catalog (`data/raw_point_clouds/`) and clip to the analysis area. |
 | `02_segment.R` | Normalize heights, detect tree tops, segment trees, classify snags, and **save** the result to `data/raw_point_clouds/LHH_aa_z3segssnags.las`. |
 | `03_visualize.R` | Load the saved LAS, compute crown metrics, and display an interactive map on the SF Pictometry 2024 aerial. |
+| `04_pointcloud_web_prep.R` | Use `data/vector/crowns.geojson` to export one buffered `.laz` per tree taller than 30 m into `data/web_point_clouds/`. |
 | `run_pipeline.R` | Master runner – sources each step in order with configurable flags. |
 | `LHHtrees2023/app.R` | Shiny app for interactive exploration; can be deployed to shinyapps.io. |
 
@@ -39,6 +40,7 @@ You can also run individual steps directly:
 source("01_load_data.R")   # populates `las` in memory
 source("02_segment.R")     # uses `las`; saves result to disk
 source("03_visualize.R")   # reads from disk; opens interactive map
+source("04_pointcloud_web_prep.R")  # writes per-tree LAZ files for the web
 ```
 
 ### Test area vs. full area
