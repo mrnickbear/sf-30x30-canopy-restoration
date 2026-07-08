@@ -1,24 +1,19 @@
 /* ============================================================
    SF 30×30 Canopy Restoration – app.js
-   Leaflet 2D map + Deck.gl 3D point cloud + linked data table
+   Leaflet 2D map + Deck.gl 3D view + linked data table
    ============================================================ */
-
-// ── loaders.gl: parse LAZ/LAS files in the browser ────────────
-// These ESM packages match the loaders.gl version bundled in deck.gl 8.9.35.
-import { parse }      from "https://cdn.jsdelivr.net/npm/@loaders.gl/core@3.3.14/+esm";
-import { LASLoader }  from "https://cdn.jsdelivr.net/npm/@loaders.gl/las@3.3.14/+esm";
 
 // ── Configuration (mirrors config.R) ──────────────────────────
 const PICTOMETRY_URL =
   "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}";
-const CROWNS_GEOJSON   = "data/vector/crowns.geojson";
-const TREETOPS_GEOJSON = "data/vector/treetops.geojson";
-const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
-// Mirrors WEB_POINT_CLOUD_MIN_HEIGHT_M in config.R
-const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
+const CROWNS_GEOJSON  = "data/vector/crowns.geojson";
 // Default map center: Laguna Honda Hospital (LHH) area, SF
-const DEFAULT_CENTER = [37.75011333486208, -122.45934823666263];
-const DEFAULT_ZOOM   = 18;
+const DEFAULT_CENTER  = [37.75011333486208, -122.45934823666263];
+const DEFAULT_ZOOM    = 18;
+// Scale factor applied to ZTOP (meters) for 3D extrusion height.
+// Trees are relatively short compared to the map extent, so 1.5× makes
+// the canopy volumes clearly visible at typical tilt angles.
+const EXTRUSION_SCALE_FACTOR = 1.5;
 
 // ── Viridis-like 5-stop colour scale ──────────────────────────
 const VIRIDIS = [
@@ -30,6 +25,7 @@ const VIRIDIS = [
 ];
 
 function viridisColor(t) {
+  // t in [0,1] → interpolated RGB
   const n = VIRIDIS.length - 1;
   const i = Math.min(Math.floor(t * n), n - 1);
   const f = t * n - i;
@@ -42,55 +38,42 @@ function viridisColor(t) {
   ];
 }
 
-// ── Shared state ──────────────────────────────────────────────
-let geojsonData   = null;
-let heightMin     = 0;
-let heightMax     = 1;
-let selectedId    = null;    // currently selected treeID (string)
-let leafletLayers = {};      // treeID → Leaflet layer
-let tableRows     = [];      // data rows for the table
-let sortCol       = "ZTOP";
-let sortDir       = "desc";
-let searchQuery   = "";
-let deckGL        = null;
-let showBasemap   = true;
-let deckVisible   = false;   // true when 3D point cloud panel is shown
-let pointCloudLayer = null;  // cached PointCloudLayer; reused when toggling basemap
+function rgbCss(rgb, alpha = 1) {
+  return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+}
 
-// 3D-viewable tree state (populated after both GeoJSON files load)
-let viewableIds   = new Set();  // set of string treeIDs with ZTOP > threshold
-let crownPropByID = {};         // string treeID → crown properties (XTOP, YTOP, ZTOP)
-let treetopByID   = {};         // string treeID → { lng, lat }
-let lazMaxDigits  = 2;          // zero-padding for LAZ filenames (matches R output)
+// ── Shared state ──────────────────────────────────────────────
+let geojsonData    = null;
+let heightMin      = 0;
+let heightMax      = 1;
+let selectedId     = null;   // currently selected treeID
+let leafletLayers  = {};     // treeID → Leaflet layer
+let tableRows      = [];     // [{feature, tr}]
+let sortCol        = "ZTOP";
+let sortDir        = "desc";
+let searchQuery    = "";
+let deckGL         = null;
+let showBasemap    = true;
 
 // ── Utility: normalise height value ───────────────────────────
-function heightNorm(z, zMin = heightMin, zMax = heightMax) {
-  if (zMax === zMin) return 0.5;
-  return Math.max(0, Math.min(1, (z - zMin) / (zMax - zMin)));
+function heightNorm(z) {
+  if (heightMax === heightMin) return 0.5;
+  return Math.max(0, Math.min(1, (z - heightMin) / (heightMax - heightMin)));
 }
 
 function featureColor(feature) {
   const props = feature.properties || {};
-  if (props.snagCls > 0) return [248, 81, 73];
+  if (props.snagCls > 0) return [248, 81, 73];   // red for snags
   const z = props.ZTOP ?? 0;
   return viridisColor(heightNorm(z));
-}
-
-function isViewable(treeID) {
-  return viewableIds.has(String(treeID));
-}
-
-// Generate the LAZ filename as the R pipeline does
-function lazUrl(treeID) {
-  return `${WEB_POINT_CLOUD_DIR}/tree_${String(treeID).padStart(lazMaxDigits, "0")}.laz`;
 }
 
 // ── Draw legend gradient on a canvas ──────────────────────────
 function drawLegend(canvasId) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const ctx  = canvas.getContext("2d");
-  const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  const ctx    = canvas.getContext("2d");
+  const grad   = ctx.createLinearGradient(0, 0, canvas.width, 0);
   for (let s = 0; s <= 1; s += 0.05) {
     const rgb = viridisColor(s);
     grad.addColorStop(s, `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`);
@@ -100,11 +83,11 @@ function drawLegend(canvasId) {
 }
 
 function updateLegendLabels() {
-  ["legend-min"].forEach(id => {
+  ["legend-min", "deck-legend-min"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = heightMin.toFixed(1) + " m";
   });
-  ["legend-max"].forEach(id => {
+  ["legend-max", "deck-legend-max"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = heightMax.toFixed(1) + " m";
   });
@@ -116,19 +99,38 @@ function setStatus(msg) {
   if (el) el.textContent = msg;
 }
 
+// ── Tab switching ──────────────────────────────────────────────
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+    const panel = document.getElementById(btn.dataset.panel);
+    if (panel) panel.classList.add("active");
+
+    // Re-render deck when its panel becomes visible
+    if (btn.dataset.panel === "panel-3d" && deckGL) {
+      requestAnimationFrame(() => deckGL.redraw(true));
+    }
+  });
+});
+
 // ══════════════════════════════════════════════════════════════
-// SECTION 1 – Fetch GeoJSON files and boot everything
+// SECTION 1 – Fetch GeoJSON and boot everything
 // ══════════════════════════════════════════════════════════════
 async function init() {
   setStatus("Fetching crowns.geojson…");
 
-  // Detect file:// protocol before attempting any fetch
+  // Browsers block fetch() on file:// — must be served over HTTP.
   if (location.protocol === "file:") {
     const hint = document.createElement("span");
-    hint.textContent =
-      "⚠ Could not load crowns.geojson: open via a local server — e.g. ";
+    hint.textContent = "⚠ Could not load crowns.geojson: open via a local server — e.g. ";
     const code = document.createElement("code");
-    code.textContent = "python -m http.server 8080";
+    code.textContent = "servr::httd(port = 8080)";
     const link = document.createElement("a");
     link.href = "http://localhost:8080";
     link.target = "_blank";
@@ -151,7 +153,6 @@ async function init() {
     return;
   }
 
-  // Load crowns.geojson
   try {
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
@@ -170,39 +171,6 @@ async function init() {
     return;
   }
 
-  // Load treetops.geojson (needed for WGS84 coordinates of each tree top)
-  try {
-    const res = await fetch(TREETOPS_GEOJSON);
-    if (res.ok) {
-      const treetops = await res.json();
-      treetops.features.forEach(f => {
-        const id = String(f.properties?.treeID);
-        if (f.geometry?.coordinates?.length >= 2) {
-          treetopByID[id] = {
-            lng: f.geometry.coordinates[0],
-            lat: f.geometry.coordinates[1],
-          };
-        }
-      });
-    }
-  } catch (_) {
-    // treetops.geojson is optional; 3D view degrades gracefully without it
-  }
-
-  // Build per-tree lookups and identify 3D-viewable trees
-  geojsonData.features.forEach(f => {
-    const id = String(f.properties?.treeID);
-    crownPropByID[id] = f.properties;
-    if ((f.properties?.ZTOP ?? 0) > WEB_POINT_CLOUD_MIN_HEIGHT_M) {
-      viewableIds.add(id);
-    }
-  });
-
-  // Match R's zero-padding: max digits across the viewable IDs
-  if (viewableIds.size > 0) {
-    lazMaxDigits = Math.max(...[...viewableIds].map(id => id.length));
-  }
-
   // Compute height extent from ZTOP
   const heights = geojsonData.features
     .map(f => f.properties?.ZTOP)
@@ -215,57 +183,60 @@ async function init() {
   const total = geojsonData.features.length;
   document.getElementById("crown-count").textContent =
     `${total.toLocaleString()} trees`;
-  setStatus(`Loaded ${total.toLocaleString()} tree crowns. ` +
-            `${viewableIds.size} have 3D point clouds.`);
+  setStatus(`Loaded ${total.toLocaleString()} tree crowns.`);
 
   drawLegend("legend-canvas");
+  drawLegend("deck-legend-canvas");
   updateLegendLabels();
 
   initLeaflet();
   initTable();
+  initDeckGL();
 }
 
 // ══════════════════════════════════════════════════════════════
 // SECTION 2 – Leaflet 2D map
 // ══════════════════════════════════════════════════════════════
-let leafletMap   = null;
+let leafletMap = null;
 let geojsonLayer = null;
 
 function leafletStyle(feature) {
-  const rgb    = featureColor(feature);
+  const rgb = featureColor(feature);
   const isSnag = (feature.properties?.snagCls ?? 0) > 0;
-  const is3D   = isViewable(feature.properties?.treeID);
   return {
     fillColor:   `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
     fillOpacity: isSnag ? 0.7 : 0.55,
-    // 3D-viewable → amber stroke; snag → red; others → same as fill
-    color: is3D   ? "#d29922"
-         : isSnag ? "#f85149"
-         : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
-    weight:  is3D ? 2.5 : isSnag ? 2.0 : 0.8,
-    opacity: 1,
+    color:       isSnag ? "#f85149" : `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
+    weight:      isSnag ? 2.0 : 0.8,
+    opacity:     1,
   };
 }
 
-function highlightStyle() {
-  return { fillOpacity: 0.85, color: "#58a6ff", weight: 2.5 };
+function highlightStyle(feature) {
+  return {
+    fillOpacity: 0.85,
+    color: "#58a6ff",
+    weight: 2.5,
+  };
 }
 
 function initLeaflet() {
   leafletMap = L.map("map", {
-    center:      DEFAULT_CENTER,
-    zoom:        DEFAULT_ZOOM,
+    center: DEFAULT_CENTER,
+    zoom:   DEFAULT_ZOOM,
     zoomControl: true,
   });
 
+  // Pictometry 2024 aerial basemap
   L.tileLayer(PICTOMETRY_URL, {
-    attribution:   "SF DPW Pictometry 2024",
-    maxZoom:        22,
-    maxNativeZoom:  22,
+    attribution:  "SF DPW Pictometry 2024",
+    maxZoom:       22,
+    maxNativeZoom: 22,
   }).addTo(leafletMap);
 
+  // Crown polygons
   geojsonLayer = L.geoJSON(geojsonData, {
-    style:         leafletStyle,
+    style:        leafletStyle,
     onEachFeature: (feature, layer) => {
       const props = feature.properties || {};
       const id    = props.treeID;
@@ -279,38 +250,38 @@ function initLeaflet() {
     },
   }).addTo(leafletMap);
 
+  // Fit map to crowns extent
   if (geojsonLayer.getBounds().isValid()) {
     leafletMap.fitBounds(geojsonLayer.getBounds(), { padding: [20, 20] });
   }
 }
 
 function buildTooltipHtml(props) {
-  const snag     = (props.snagCls ?? 0) > 0
+  const snag = (props.snagCls ?? 0) > 0
     ? `<br><b style="color:#f85149">Snag class ${props.snagCls}</b>` : "";
-  const viewable = isViewable(props.treeID)
-    ? `<br><span style="color:#d29922">🔺 3D point cloud available</span>` : "";
   return `<b>Tree ${props.treeID}</b><br>` +
-         `Height: ${(props.ZTOP ?? "—")} m${snag}${viewable}`;
+         `Height: ${(props.ZTOP ?? "—")} m${snag}`;
 }
 
 // ══════════════════════════════════════════════════════════════
 // SECTION 3 – Data table
 // ══════════════════════════════════════════════════════════════
 function initTable() {
+  // Build row data from features (compute centroid lon/lat)
   tableRows = geojsonData.features.map(feature => {
-    const props  = feature.properties || {};
+    const props = feature.properties || {};
     const coords = featureCentroid(feature);
     return {
-      treeID:   props.treeID  ?? "—",
-      ZTOP:     props.ZTOP    ?? 0,
-      snagCls:  props.snagCls ?? 0,
-      viewable: isViewable(props.treeID),
-      lat:      coords ? +coords[1].toFixed(6) : "—",
-      lng:      coords ? +coords[0].toFixed(6) : "—",
+      treeID:  props.treeID  ?? "—",
+      ZTOP:    props.ZTOP    ?? 0,
+      snagCls: props.snagCls ?? 0,
+      lat:     coords ? +coords[1].toFixed(6) : "—",
+      lng:     coords ? +coords[0].toFixed(6) : "—",
       feature,
     };
   });
 
+  // Sort headers
   document.querySelectorAll("#crown-table th.sortable").forEach(th => {
     const arrow = document.createElement("span");
     arrow.className = "sort-arrow";
@@ -328,6 +299,7 @@ function initTable() {
     });
   });
 
+  // Search
   document.getElementById("table-search").addEventListener("input", e => {
     searchQuery = e.target.value.trim().toLowerCase();
     renderTable();
@@ -341,6 +313,7 @@ function featureCentroid(feature) {
   const geom = feature.geometry;
   if (!geom) return null;
   if (geom.type === "Point") return geom.coordinates;
+  // Rough centroid for polygons: average of first ring
   if (geom.type === "Polygon") {
     const ring = geom.coordinates[0];
     const lon  = ring.reduce((s, c) => s + c[0], 0) / ring.length;
@@ -359,12 +332,14 @@ function featureCentroid(feature) {
 function renderTable() {
   let rows = tableRows;
 
+  // Filter by search
   if (searchQuery) {
     rows = rows.filter(r =>
       String(r.treeID).toLowerCase().includes(searchQuery)
     );
   }
 
+  // Sort
   rows = [...rows].sort((a, b) => {
     let av = a[sortCol];
     let bv = b[sortCol];
@@ -395,25 +370,28 @@ function renderTable() {
       ? `<span class="snag-badge">${row.snagCls}</span>` : "0";
     const heightFmt = typeof row.ZTOP === "number"
       ? row.ZTOP.toFixed(1) : row.ZTOP;
-    // Amber "3D" badge for trees with a point cloud export
-    const badge3d = row.viewable
-      ? `<span class="badge-3d">3D</span>` : "";
 
     tr.innerHTML =
       `<td>${row.treeID}</td>` +
-      `<td>${heightFmt}${badge3d}</td>` +
+      `<td>${heightFmt}</td>` +
       `<td>${snagBadge}</td>` +
       `<td>${row.lat}</td>` +
       `<td>${row.lng}</td>`;
 
     tr.addEventListener("click", () => selectTree(row.treeID, "table"));
     tbody.appendChild(tr);
+
+    // Cache tr reference for fast selection update
+    row._tr = tr;
   });
 
-  // Cache tr references for scroll-to
+  // Store visible rows for scroll-to
+  tableRows.forEach(r => { r._tr = null; });
   rows.forEach((r, idx) => {
     r._tr = tbody.querySelector(`tr:nth-child(${idx + 1})`);
   });
+  const trByID = {};
+  rows.forEach(r => { trByID[r.treeID] = r._tr; });
 }
 
 function updateSortHeaders() {
@@ -441,89 +419,141 @@ function selectTree(id, source) {
     leafletLayers[prevId].bringToBack();
   }
 
-  // Highlight selected crown
+  // Apply highlight to new selection
   if (leafletLayers[id]) {
     leafletLayers[id].setStyle(highlightStyle());
     leafletLayers[id].bringToFront();
-    if (source !== "map" && !deckVisible) {
+    if (source !== "map") {
+      // Pan map to feature
       const bounds = leafletLayers[id].getBounds();
       if (bounds.isValid()) leafletMap.panTo(bounds.getCenter());
     }
   }
 
-  // Re-render table
+  // Re-render table to update highlight (fast path: toggle class)
   renderTable();
 
+  // Scroll selected row into view
   requestAnimationFrame(() => {
     const selectedTr = document.querySelector("#crown-table tbody tr.selected");
-    if (selectedTr) selectedTr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (selectedTr) {
+      selectedTr.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   });
 
-  // Show tree info in status bar
+  // Update Deck.gl
+  if (deckGL) renderDeckLayers();
+
+  // Show details in status bar
   const feature = geojsonData.features.find(
     f => String(f.properties?.treeID) === String(id)
   );
   if (feature) {
     const p = feature.properties;
-    setStatus(
-      `Tree ${p.treeID} — height ${p.ZTOP ?? "—"} m` +
-      (isViewable(id) ? " · 🔺 loading point cloud…" : "")
-    );
-  }
-
-  // Auto-activate 3D point cloud view when a viewable tree is selected
-  if (isViewable(id)) {
-    showPointCloud(id);
-  } else if (deckVisible) {
-    // Return to map when a non-viewable tree is selected while 3D is open
-    hidePointCloud();
+    setStatus(`Selected tree ${p.treeID} — height ${p.ZTOP ?? "—"} m, snag class ${p.snagCls ?? 0}`);
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-// SECTION 5 – 3D point cloud view (Deck.gl + loaders.gl)
+// SECTION 5 – Deck.gl 3D view
 // ══════════════════════════════════════════════════════════════
+const DECK_DEFAULT_VIEW = {
+  longitude: DEFAULT_CENTER[1],
+  latitude:  DEFAULT_CENTER[0],
+  zoom:       17,
+  pitch:      45,
+  bearing:    0,
+};
 
-// Show the deck panel (hide the Leaflet map)
-function showDeckPanel() {
-  document.getElementById("map").classList.add("hidden");
-  document.getElementById("deck-container").classList.remove("hidden");
-  document.getElementById("map-legend").classList.add("hidden");
-  deckVisible = true;
+function deckFillColor(feature) {
+  const id    = String(feature.properties?.treeID);
+  const color = featureColor(feature);
+  if (id === String(selectedId)) return [88, 166, 255, 230]; // highlight blue
+  return [...color, 200];
 }
 
-// Return to the Leaflet map
-function hidePointCloud() {
-  document.getElementById("deck-container").classList.add("hidden");
-  document.getElementById("map").classList.remove("hidden");
-  document.getElementById("map-legend").classList.remove("hidden");
-  deckVisible = false;
+function deckLineColor(feature) {
+  const isSnag = (feature.properties?.snagCls ?? 0) > 0;
+  if (isSnag) return [248, 81, 73, 255];
+  const id = String(feature.properties?.treeID);
+  if (id === String(selectedId)) return [88, 166, 255, 255];
+  return [255, 255, 255, 40];
+}
 
-  // Re-apply selection highlight on the 2D map after returning
-  if (selectedId && leafletLayers[selectedId]) {
-    const bounds = leafletLayers[selectedId].getBounds();
-    if (bounds && bounds.isValid()) leafletMap.panTo(bounds.getCenter());
+function renderDeckLayers() {
+  if (!deckGL || !geojsonData) return;
+
+  const layer = new deck.GeoJsonLayer({
+    id:              "crowns",
+    data:            geojsonData,
+    pickable:        true,
+    stroked:         true,
+    filled:          true,
+    extruded:        true,
+    wireframe:       false,
+    getElevation:    f => Math.max(0, (f.properties?.ZTOP ?? 0) * EXTRUSION_SCALE_FACTOR),
+    getFillColor:    deckFillColor,
+    getLineColor:    deckLineColor,
+    getLineWidth:    1,
+    lineWidthUnits:  "pixels",
+    updateTriggers:  { getFillColor: [selectedId], getLineColor: [selectedId] },
+    onClick: ({ object }) => {
+      if (object) selectTree(object.properties?.treeID, "deck");
+    },
+    onHover: ({ object, x, y }) => {
+      const tip = document.getElementById("deck-tooltip");
+      if (!object) { tip.classList.add("hidden"); return; }
+      const p = object.properties || {};
+      tip.classList.remove("hidden");
+      tip.style.left = `${x + 12}px`;
+      tip.style.top  = `${y + 12}px`;
+      tip.innerHTML  =
+        `<table>` +
+        `<tr><td>Tree</td><td><b>${p.treeID ?? "—"}</b></td></tr>` +
+        `<tr><td>Height</td><td>${p.ZTOP ?? "—"} m</td></tr>` +
+        `<tr><td>Snag</td><td>${p.snagCls > 0 ? "⚠ class " + p.snagCls : "live"}</td></tr>` +
+        `</table>`;
+    },
+  });
+
+  const layers = [layer];
+
+  // Optional Pictometry basemap tile layer
+  if (showBasemap) {
+    layers.unshift(new deck.TileLayer({
+      id:   "pictometry",
+      data: PICTOMETRY_URL,
+      minZoom:         0,
+      maxZoom:         22,
+      tileSize:        256,
+      renderSubLayers: props => new deck.BitmapLayer(props, {
+        data:   null,
+        image:  props.data,
+        bounds: props.tile.boundingBox.flatMap(c => c),
+      }),
+    }));
   }
+
+  deckGL.setProps({ layers });
 }
 
-// Lazy-init deck.gl (created the first time a point cloud is shown)
-let savedViewState = null;  // saved per-tree view state for reset
+function initDeckGL() {
+  // Compute initial view state centered on crowns
+  let viewState = { ...DECK_DEFAULT_VIEW };
+  if (geojsonLayer && geojsonLayer.getBounds().isValid()) {
+    const center = geojsonLayer.getBounds().getCenter();
+    viewState.longitude = center.lng;
+    viewState.latitude  = center.lat;
+  }
 
-function ensureDeckGL() {
-  if (deckGL) return;
   const canvas = document.getElementById("deck-canvas");
+
   deckGL = new deck.Deck({
     canvas,
     width:  "100%",
     height: "100%",
     controller: true,
-    initialViewState: {
-      longitude: DEFAULT_CENTER[1],
-      latitude:  DEFAULT_CENTER[0],
-      zoom:  18,
-      pitch: 60,
-      bearing: 0,
-    },
+    initialViewState: viewState,
     onViewStateChange: ({ viewState: vs }) => {
       deckGL.setProps({ initialViewState: vs });
     },
@@ -532,149 +562,16 @@ function ensureDeckGL() {
       isDragging ? "grabbing" : isHovering ? "pointer" : "grab",
   });
 
+  renderDeckLayers();
+
   // Controls
-  document.getElementById("btn-back-to-map").addEventListener("click", () => {
-    hidePointCloud();
-  });
   document.getElementById("btn-reset-view").addEventListener("click", () => {
-    if (deckGL && savedViewState) {
-      deckGL.setProps({
-        initialViewState: { ...savedViewState, transitionDuration: 600 },
-      });
-    }
+    deckGL.setProps({ initialViewState: { ...viewState, transitionDuration: 600 } });
   });
   document.getElementById("btn-toggle-basemap").addEventListener("click", () => {
     showBasemap = !showBasemap;
-    if (deckGL && pointCloudLayer) {
-      const layers = showBasemap
-        ? [makeTileLayer(), pointCloudLayer]
-        : [pointCloudLayer];
-      deckGL.setProps({ layers });
-    }
+    renderDeckLayers();
   });
-}
-
-function makeTileLayer() {
-  return new deck.TileLayer({
-    id:   "pictometry",
-    data: PICTOMETRY_URL,
-    minZoom:    0,
-    maxZoom:    22,
-    tileSize:   256,
-    renderSubLayers: props => new deck.BitmapLayer(props, {
-      data:   null,
-      image:  props.data,
-      bounds: props.tile.boundingBox.flatMap(c => c),
-    }),
-  });
-}
-
-async function showPointCloud(treeID) {
-  const id = String(treeID);
-  showDeckPanel();
-  ensureDeckGL();
-
-  // Show the loading overlay
-  const loadingEl = document.getElementById("deck-loading");
-  loadingEl.textContent = "Loading point cloud…";
-  loadingEl.classList.remove("hidden");
-
-  const crown   = crownPropByID[id];
-  const treetop = treetopByID[id];
-
-  if (!crown) {
-    loadingEl.textContent = `⚠ No crown data for tree ${id}`;
-    return;
-  }
-  if (!treetop) {
-    loadingEl.textContent = `⚠ No WGS84 coordinates for tree ${id} (treetops.geojson missing?)`;
-    return;
-  }
-
-  try {
-    const url      = lazUrl(treeID);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status} — ${response.statusText}`);
-    const buffer   = await response.arrayBuffer();
-    const lazData  = await parse(buffer, LASLoader);
-
-    const positions = lazData.attributes.POSITION.value;  // Float32Array [x0,y0,z0, ...]
-    const nPoints   = positions.length / 3;
-
-    // Compute Z range for per-tree colour normalisation
-    let zMin = Infinity;
-    let zMax = -Infinity;
-    for (let i = 0; i < nPoints; i++) {
-      const z = positions[i * 3 + 2];
-      if (z < zMin) zMin = z;
-      if (z > zMax) zMax = z;
-    }
-
-    // Build offset position array and pre-compute colours
-    // Subtract XTOP/YTOP to convert projected coordinates to
-    // metre offsets from the tree top (compatible with METER_OFFSETS).
-    const offsetPos = new Float32Array(nPoints * 3);
-    const colours   = new Uint8Array(nPoints * 3);
-    const zRange    = zMax > zMin ? zMax - zMin : 1;
-
-    for (let i = 0; i < nPoints; i++) {
-      offsetPos[i * 3]     = positions[i * 3]     - crown.XTOP;
-      offsetPos[i * 3 + 1] = positions[i * 3 + 1] - crown.YTOP;
-      offsetPos[i * 3 + 2] = positions[i * 3 + 2];
-      const t   = (positions[i * 3 + 2] - zMin) / zRange;
-      const rgb = viridisColor(t);
-      colours[i * 3]     = rgb[0];
-      colours[i * 3 + 1] = rgb[1];
-      colours[i * 3 + 2] = rgb[2];
-    }
-
-    // Update deck legend labels with this tree's height range
-    const deckMin = document.getElementById("deck-legend-min");
-    const deckMax = document.getElementById("deck-legend-max");
-    if (deckMin) deckMin.textContent = zMin.toFixed(1) + " m";
-    if (deckMax) deckMax.textContent = zMax.toFixed(1) + " m";
-    drawLegend("deck-legend-canvas");
-
-    pointCloudLayer = new deck.PointCloudLayer({
-      id: "point-cloud",
-      coordinateSystem: deck.COORDINATE_SYSTEM.METER_OFFSETS,
-      coordinateOrigin: [treetop.lng, treetop.lat],
-      data: {
-        length: nPoints,
-        attributes: {
-          getPosition: { value: offsetPos, size: 3 },
-          getColor:    { value: colours,   size: 3 },
-        },
-      },
-      pointSize: 2,
-      pickable:  false,
-    });
-
-    const targetViewState = {
-      longitude:          treetop.lng,
-      latitude:           treetop.lat,
-      zoom:               19,
-      pitch:              60,
-      bearing:            0,
-      transitionDuration: 800,
-    };
-    savedViewState = { longitude: treetop.lng, latitude: treetop.lat, zoom: 19, pitch: 60, bearing: 0 };
-
-    const layers = [];
-    if (showBasemap) layers.push(makeTileLayer());
-    layers.push(pointCloudLayer);
-
-    deckGL.setProps({ initialViewState: targetViewState, layers });
-
-    loadingEl.classList.add("hidden");
-    setStatus(
-      `Tree ${id} — ${nPoints.toLocaleString()} pts, ` +
-      `height ${crown.ZTOP} m, Z range ${zMin.toFixed(1)}–${zMax.toFixed(1)} m`
-    );
-
-  } catch (err) {
-    loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
-  }
 }
 
 // ── Boot ──────────────────────────────────────────────────────
