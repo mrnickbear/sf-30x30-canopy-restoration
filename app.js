@@ -16,10 +16,14 @@ const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 
 // LAS parsing constants
-// Standard point record size (bytes) for each point data format (ASPRS LAS 1.4 spec)
+// Standard point record size (bytes) indexed by point data format 0–10 (ASPRS LAS 1.4 spec)
 const POINT_FORMAT_SIZE = [20, 28, 26, 34, 57, 63, 30, 36, 38, 59, 67];
 // Extra bytes data_type → byte width (types 1–10; type 0 is undocumented/variable)
-const EXTRA_BYTE_SIZES = [0, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
+const EXTRA_BYTE_SIZES         = [0, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
+const VLR_HEADER_SIZE          = 54;   // bytes: 2 reserved + 16 userID + 2 recordID + 2 recLen + 32 desc
+const EXTRA_BYTES_DESCRIPTOR_SIZE = 192; // bytes per extra-bytes descriptor (ASPRS spec)
+// R's NA_integer_ sentinel: 32-bit signed minimum, written by lidR for unclassified treeID
+const R_NA_INTEGER = -2147483648;
 
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
@@ -589,11 +593,11 @@ function parseLAS(buffer) {
   // ── Parse VLRs to locate the treeID extra bytes attribute ────
   // lidR stores treeID as an int32 Extra Bytes record (LASF_Spec / record ID 4).
   // Each extra bytes descriptor is 192 bytes; the name field starts at byte 4.
-  const stdPointSize = POINT_FORMAT_SIZE[pointFormat] ?? 20;
+  const stdPointSize = POINT_FORMAT_SIZE[pointFormat] ?? POINT_FORMAT_SIZE[0];
   let treeIDOffset = -1;  // byte offset of treeID within a full point record (-1 = not found)
 
   let vlrPos = headerSize;
-  for (let v = 0; v < numVLRs && vlrPos + 54 <= offsetToPoints; v++) {
+  for (let v = 0; v < numVLRs && vlrPos + VLR_HEADER_SIZE <= offsetToPoints; v++) {
     let userID = "";
     for (let c = 0; c < 16; c++) {
       const ch = dv.getUint8(vlrPos + 2 + c);
@@ -605,8 +609,8 @@ function parseLAS(buffer) {
 
     if (userID === "LASF_Spec" && recordID === 4) {
       let extraByteOffset = 0;  // running byte offset within the extra bytes section
-      for (let d = 0; d + 192 <= recordLen; d += 192) {
-        const descBase = vlrPos + 54 + d;
+      for (let d = 0; d + EXTRA_BYTES_DESCRIPTOR_SIZE <= recordLen; d += EXTRA_BYTES_DESCRIPTOR_SIZE) {
+        const descBase = vlrPos + VLR_HEADER_SIZE + d;
         const dataType = dv.getUint8(descBase + 2);
         let name = "";
         for (let c = 0; c < 32; c++) {
@@ -621,7 +625,7 @@ function parseLAS(buffer) {
         extraByteOffset += EXTRA_BYTE_SIZES[dataType] ?? 0;
       }
     }
-    vlrPos += 54 + recordLen;
+    vlrPos += VLR_HEADER_SIZE + recordLen;
   }
 
   // ── Read points ───────────────────────────────────────────────
@@ -644,7 +648,7 @@ function parseLAS(buffer) {
     let treeID = null;
     if (treeIDOffset >= 0) {
       const raw = dv.getInt32(base + treeIDOffset, true);
-      treeID = (raw === -2147483648) ? null : raw;
+      treeID = (raw === R_NA_INTEGER) ? null : raw;
     }
 
     pts[i] = { position: [x, y, z], z, treeID };
@@ -727,7 +731,7 @@ async function show3D(id) {
         return [...viridisColor(t), 255]; // selected tree: viridis by elevation
       },
       pointSize: 2,
-      updateTriggers: { getColor: [mainTID, hasTID, zMin, zMax] },
+      updateTriggers: { getColor: [mainTID, hasTID] },
     });
 
     const layers = showBasemap
