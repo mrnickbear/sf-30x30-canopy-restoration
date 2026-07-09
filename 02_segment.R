@@ -20,6 +20,7 @@ library(lidR)
 library(sf)
 library(stars)
 library(scales)
+library(FNN)
 
 # ---- Require las in memory ----
 if (!exists("las")) {
@@ -36,33 +37,71 @@ dem <- stars::read_stars(NORMALIZATION_DEM_PATH)
 nlas <- normalize_height(las, dem)
 nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
 
-# ---- Canopy height model (normalized) ----
-message("Generating canopy height model...")
-chm <- rasterize_canopy(las = nlas, res = CHM_RES, algorithm = p2r(0.15))
-plot(chm, col = height.colors(50), main = "Canopy Height Model (normalized)")
+# # ---- Canopy height model (normalized) ----
+# message("Generating canopy height model...")
+# chm <- rasterize_canopy(las = nlas, res = CHM_RES, algorithm = p2r(0.15))
+# plot(chm, col = height.colors(50), main = "Canopy Height Model (normalized)")
 
-# ---- Tree top detection ----
-message("Detecting tree tops (lmf, ws = ", TREE_DETECTION_WS, ")...")
-ttops <- locate_trees(nlas, lmf(ws = TREE_DETECTION_WS)) %>% st_set_crs(cs13_m)
-plot(chm, col = height.colors(50), main = "Detected tree tops")
-plot(sf::st_geometry(ttops), add = TRUE, pch = 3)
+# # ---- Tree top detection ----
+# message("Detecting tree tops (lmf, ws = ", TREE_DETECTION_WS, ")...")
+# ttops <- locate_trees(nlas, lmf(ws = TREE_DETECTION_WS)) %>% st_set_crs(cs13_m)
+# plot(chm, col = height.colors(50), main = "Detected tree tops")
+# plot(sf::st_geometry(ttops), add = TRUE, pch = 3)
 
-# ---- Tree segmentation (slow) ----
-message("Segmenting trees (li2012)... This may take several minutes.")
-seg <- segment_trees(las = nlas, algorithm = li2012())
+# # ---- Tree segmentation (slow) ----
+# message("Segmenting trees (li2012)... This may take several minutes.")
+# seg <- segment_trees(las = nlas, algorithm = li2012())
 
-# ---- Rescale intensity for snag classification ----
-# Wing (2015) expects 8-bit intensity; the 2023 LiDAR data is 16-bit.
-seg@data[, Intensity := as.integer(Intensity / (2^16 - 1) * MAX_8BIT_INTENSITY)]
+# 1. Thin the point cloud to a uniform 20-30 points per sq meter for structural tracking
+# homogenization ensures a consistent density across both open and dense canopies
+seg_thinned <- decimate_points(nlas, homogenize(density = 25, res = 1))
 
-# ---- Snag classification (slow) ----
-message("Classifying snags (wing2015)... This may take several minutes.")
-seg_snags <- segment_snags(
-  seg,
-  wing2015(neigh_radii = c(1.5, 1, 2), BBPRthrsh_mat = BBPR_THRESHOLDS)
-)
+# 2. Segment the thinned cloud (Li algorithm will perform beautifully here)
+seg_thinned <- segment_trees(las = seg_thinned, algorithm = li2012(dt1 = 1.2, dt2 = 1.6, R = 4.0))
+
+# --- NEW: MAP BACK TO ORIGINAL HIGH-RES DATA ---
+
+# 3. Extract 3D coordinates from both datasets for spatial matching
+coords_thinned <- data.frame(X = seg_thinned$X, Y = seg_thinned$Y, Z = seg_thinned$Z)
+coords_orig    <- data.frame(X = nlas$X, Y = nlas$Y, Z = nlas$Z)
+
+# 4. Find the closest thinned point for every original high-res point
+knn_result <- get.knnx(data = coords_thinned, query = coords_orig, k = 1)
+
+# 5. Extract the treeIDs using the neighbor indices and inject into original cloud
+matched_tree_ids <- seg_thinned$treeID[knn_result$nn.index]
+seg <- add_attribute(nlas, matched_tree_ids, "treeID")
+
+
+# seg <- segment_trees(las = nlas, algorithm = li2012(dt1 = 1.2, dt2 = 1.5, R = 10, speed_up = 15))
+
+# plot(seg, color = "treeID") #This is the ID we need to use consistently!!
+
+# 2. Calculate metrics (this automatically groups by the generated treeID)
+metrics <- crown_metrics(las = seg, func = .stdtreemetrics) %>% st_set_crs(cs13_m)
+
+# 3. Delineate crowns
+crown_outlines <- delineate_crowns(seg, attribute = "treeID")
+
+
+x <- plot(seg, color = "treeID")
+add_treetops3d(x, metrics, size = 10, point_antialias = TRUE)
+
+# # ---- Rescale intensity for snag classification ----
+# # Wing (2015) expects 8-bit intensity; the 2023 LiDAR data is 16-bit.
+# seg@data[, Intensity := as.integer(Intensity / (2^16 - 1) * MAX_8BIT_INTENSITY)]
+
+# # ---- Snag classification (slow) ----
+# message("Classifying snags (wing2015)... This may take several minutes.")
+# seg_snags <- segment_snags(
+#   seg,
+#   wing2015(neigh_radii = c(1.5, 1, 2), BBPRthrsh_mat = BBPR_THRESHOLDS)
+# )
+
+# plot(seg_snags, color = "treeID") #This is the ID we need to use consistently!!
+
 
 # ---- Save results ----
 message("Saving segmented LAS to: ", OUTPUT_LAS_PATH)
-writeLAS(seg_snags, OUTPUT_LAS_PATH, index = FALSE)
+writeLAS(seg, OUTPUT_LAS_PATH, index = FALSE)
 message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
