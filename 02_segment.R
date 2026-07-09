@@ -77,15 +77,16 @@ seg <- add_attribute(nlas, matched_tree_ids, "treeID")
 
 # plot(seg, color = "treeID") #This is the ID we need to use consistently!!
 
-# 2. Calculate metrics (this automatically groups by the generated treeID)
-metrics <- crown_metrics(las = seg, func = .stdtreemetrics) %>% st_set_crs(cs13_m)
-
-# 3. Delineate crowns
-crown_outlines <- delineate_crowns(seg, attribute = "treeID")
+# # 2. Calculate metrics (this automatically groups by the generated treeID)
+# metrics <- crown_metrics(las = seg, func = .stdtreemetrics) %>% st_set_crs(cs13_m)
+# 
+# # 3. Delineate crowns
+# crown_outlines <- delineate_crowns(seg, attribute = "treeID")
 
 
 x <- plot(seg, color = "treeID")
-add_treetops3d(x, metrics, size = 10, point_antialias = TRUE)
+# add_treetops3d(x, metrics, size = 10, point_antialias = TRUE)
+
 
 # # ---- Rescale intensity for snag classification ----
 # # Wing (2015) expects 8-bit intensity; the 2023 LiDAR data is 16-bit.
