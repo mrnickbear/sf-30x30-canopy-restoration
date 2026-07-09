@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
+<Document>
+<name>
+<![CDATA[
+Dan's Lost Trail
+]]>
+</name>
+<visibility>1</visibility>
+<Style id="lineStyle">
+<LineStyle>
+<color>ff14b446</color>
+<width>2</width>
+</LineStyle>
+</Style>
+<Folder>
+<name>
+<![CDATA[
+Tracks
+]]>
+</name>
+<visibility>1</visibility>
+<Placemark id="468340">
+<name>
+<![CDATA[
+Dan's Lost Trail
+]]>
+</name>
+<description>
+<![CDATA[
+<a href="https://www.trailforks.com/trails/dan-s-lost-trail/">View on Trailforks</a>
+]]>
+</description>
+<visibility>1</visibility>
+<styleUrl>#lineStyle</styleUrl>
+<ExtendedData>
+<Data name="trailid"><value>468340</value></Data>
+<Data name="url"><value>https://www.trailforks.com/trails/dan-s-lost-trail/</value></Data>
+<Data name="closed"><value>0</value></Data>
+<Data name="archived"><value>0</value></Data>
+<Data name="planned"><value>0</value></Data>
+<Data name="difficulty"><value>Green</value></Data>
+<Data name="difficulty_id"><value>3</value></Data>
+<Data name="direction"><value>Both Directions</value></Data>
+<Data name="direction_id"><value>3</value></Data>
+<Data name="activitytype"><value>Multi-Use</value></Data>
+<Data name="activitytype_id"><value>0</value></Data>
+<Data name="activitytypes_ids"><value>1, 6, 5</value></Data>
+<Data name="trailtype"><value>Singletrack</value></Data>
+<Data name="trailtype_id"><value>1</value></Data>
+<Data name="usage"><value>Multi-use</value></Data>
+<Data name="usage_id"><value>3</value></Data>
+<Data name="climb_difficulty"><value>Green</value></Data>
+<Data name="climb_difficulty_id"><value>3</value></Data>
+<Data name="physical_rating"><value>Easy</value></Data>
+<Data name="physical_rating_id"><value>1</value></Data>
+<Data name="ebike"><value>yes</value></Data>
+<Data name="global_rank"><value>3403</value></Data>
+<Data name="popularity_score"><value>100</value></Data>
+<Data name="distance"><value>466</value></Data>
+<Data name="alt_climb"><value>7</value></Data>
+<Data name="alt_descent"><value>-9</value></Data>
+<Data name="avg_time"><value>96</value></Data>
+</ExtendedData>
+<LineString>
+<extrude>1</extrude>
+<tessellate>1</tessellate>
+<coordinates>
+-122.4583,37.74848,142.2 -122.45835,37.74848,140.6 -122.45839,37.74852,141.1 -122.45842,37.74863,141.4 -122.45845,37.74867,140.2 -122.45848,37.7487,140.2 -122.45849,37.74873,140 -122.45847,37.74877,140 -122.45843,37.7488,139.9 -122.4584,37.74881,141.1 -122.45835,37.74881,141.1 -122.45832,37.74883,142.5 -122.45831,37.74886,142.5 -122.45831,37.74896,142.6 -122.45833,37.74903,143.1 -122.45835,37.74906,142 -122.45838,37.74906,142 -122.45842,37.74904,142 -122.45846,37.74903,140.6 -122.45852,37.74904,139.2 -122.45854,37.74908,140.3 -122.45855,37.74913,140.3 -122.45857,37.74922,140.4 -122.4586,37.74929,142.3 -122.45863,37.74932,140.5 -122.45866,37.74933,140.5 -122.45875,37.74936,142.6 -122.45883,37.74936,140.3 -122.45897,37.74939,139.3 -122.45901,37.74941,138.4 -122.45906,37.74946,140.4 -122.4591,37.74948,140.3 -122.45914,37.7495,140.3 -122.45919,37.74955,140 -122.45928,37.74968,141.4 -122.45937,37.74973,140.1 -122.45946,37.74977,138.2 -122.45951,37.74981,138.2 -122.4596,37.7499,137.7 -122.45963,37.74992,136.9 -122.45966,37.74992,136.9 -122.45968,37.74991,136.9 -122.4597,37.74989,136.2 -122.45964,37.74976,135.5 -122.45955,37.7496,133.5 -122.4595,37.74952,134 -122.45947,37.7495,134 -122.45938,37.74945,134.9 -122.45932,37.74942,134.2 -122.45926,37.74934,132.4 -122.45916,37.74928,134.7 -122.45908,37.74927,134.7 -122.45904,37.74927,135.5 -122.459,37.7493,135.5 -122.45897,37.7493,136.9 -122.45894,37.74928,136.9 -122.45892,37.74924,136 -122.4589,37.74922,136 -122.45889,37.74917,136 -122.45887,37.74912,136.7 -122.45881,37.74906,136.7 -122.45876,37.74902,137.3 -122.45873,37.74892,136.6 -122.4587,37.74885,137.1 -122.4587,37.74881,137.1 -122.45869,37.74877,137.2 -122.45866,37.74868,138.9 -122.45865,37.74865,138.9 -122.45861,37.74862,138.8 -122.45855,37.74858,138.9 -122.45849,37.74854,139.9 -122.45848,37.74851,140 -122.45849,37.74848,140 -122.45852,37.74847,138.7 </coordinates>
+</LineString>
+</Placemark>
+</Folder>
+</Document>
+</kml>

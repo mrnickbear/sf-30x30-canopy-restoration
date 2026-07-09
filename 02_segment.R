@@ -101,16 +101,24 @@ x <- plot(seg, color = "treeID")
 
 # plot(seg_snags, color = "treeID") #This is the ID we need to use consistently!!
 
+# Use add_lasattribute directly to bind the vector and update the LAS header 
+seg <- add_lasattribute(
+  las  = seg, 
+  x    = matched_tree_ids, 
+  name = "treeID", 
+  desc = "Unique tree identifier from segmentation"
+)
+
 
 # ---- Save results ----
 message("Saving segmented LAS to: ", OUTPUT_LAS_PATH)
 save_ok <- writeLAS(seg, OUTPUT_LAS_PATH, index = FALSE)
-if (!isTRUE(save_ok)) {
+if (save_ok != OUTPUT_LAS_PATH) {
   stop("Failed to write segmented LAS to: ", OUTPUT_LAS_PATH)
 }
 
 # Verify treeID persisted in the saved LAS for downstream crown_metrics().
-seg_check <- readLAS(OUTPUT_LAS_PATH, select = "treeID")
+seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
 if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
        OUTPUT_LAS_PATH)
