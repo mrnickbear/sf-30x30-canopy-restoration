@@ -110,7 +110,7 @@ if (!isTRUE(save_ok)) {
 }
 
 # Verify treeID persisted in the saved LAS for downstream crown_metrics().
-seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
+seg_check <- readLAS(OUTPUT_LAS_PATH, select = "treeID")
 if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
        OUTPUT_LAS_PATH)
