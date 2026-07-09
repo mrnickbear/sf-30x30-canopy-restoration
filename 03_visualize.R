@@ -22,7 +22,11 @@ library(leaflet)
 
 # ---- Load segmented LAS ----
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
-seg <- readALSLAS(OUTPUT_LAS_PATH, filter = "-drop_z_below 10")
+seg <- readLAS(OUTPUT_LAS_PATH, filter = "-drop_z_below 10")
+if (is.null(seg) || !"treeID" %in% names(seg@data)) {
+  stop("Loaded LAS is missing 'treeID'. Re-run 02_segment.R to save a segmented LAS to: ",
+       OUTPUT_LAS_PATH)
+}
 
 # plot(seg, color = "treeID") #This is the ID we need to use consistently!!
 

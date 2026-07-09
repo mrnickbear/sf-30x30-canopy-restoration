@@ -104,5 +104,15 @@ x <- plot(seg, color = "treeID")
 
 # ---- Save results ----
 message("Saving segmented LAS to: ", OUTPUT_LAS_PATH)
-writeLAS(seg, OUTPUT_LAS_PATH, index = FALSE)
+save_ok <- writeLAS(seg, OUTPUT_LAS_PATH, index = FALSE)
+if (!isTRUE(save_ok)) {
+  stop("Failed to write segmented LAS to: ", OUTPUT_LAS_PATH)
+}
+
+# Verify treeID persisted in the saved LAS for downstream crown_metrics().
+seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
+if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
+  stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
+       OUTPUT_LAS_PATH)
+}
 message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
