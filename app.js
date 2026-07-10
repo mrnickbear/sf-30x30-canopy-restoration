@@ -79,7 +79,7 @@ function localToLngLat(x, y) {
 
 async function fetchLasBuffer(treeID) {
   const numericTreeID = Number(treeID);
-  const treeIDForFile = Number.isInteger(numericTreeID) && numericTreeID >= 0
+  const treeIDForFile = Number.isInteger(numericTreeID) && numericTreeID > 0
     ? String(numericTreeID).padStart(lasTreeIdPadWidth, "0")
     : String(treeID);
   const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
@@ -200,7 +200,7 @@ async function init() {
     geojsonData = await res.json();
     const numericTreeIDs = geojsonData.features
       .map(f => Number(f.properties?.treeID))
-      .filter(id => Number.isInteger(id) && id >= 0);
+      .filter(id => Number.isInteger(id) && id > 0);
     if (numericTreeIDs.length > 0) {
       const maxTreeID = numericTreeIDs.reduce(
         (max, id) => (id > max ? id : max),
