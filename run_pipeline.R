@@ -22,6 +22,16 @@
 #     source("02_segment.R")
 #     source("03_visualize.R")
 #     source("04_pointcloud_web_prep.R")
+#
+#   To run test server:
+#   1. Start the server and save its handle
+#   my_server <- servr::httd(port = 8080)
+#   Then browse to http://localhost:8080/
+#   2. When you are done, shut down only that specific server
+#   servr::daemon_stop(my_server)
+
+# 2. When you are done, shut down only that specific server
+servr::daemon_stop(my_server)
 
 # ---- Configuration ----
 # Clear the global environment, then load shared settings.
@@ -40,8 +50,10 @@ FORCE_SEGMENT  <- FALSE
 
 RUN_LOAD_DATA  <- TRUE
 RUN_SEGMENT    <- FORCE_SEGMENT || !file.exists(OUTPUT_LAS_PATH)
-RUN_VISUALIZE  <- TRUE
-RUN_WEB_PREP   <- TRUE
+
+#Consolidation due to treeID not coming through in saved LAS file
+RUN_VISUALIZE  <- FALSE #consolidated with step 2
+RUN_WEB_PREP   <- FALSE #consolidated with step 2
 
 # ---- Step 1: Load data ----
 if (RUN_LOAD_DATA) {

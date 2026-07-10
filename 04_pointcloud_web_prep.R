@@ -20,10 +20,10 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
        ". Run 02_segment.R first.")
 }
 
-if (!file.exists(CROWNS_GEOJSON_PATH)) {
-  stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
-       ". Create or copy the Phase 3 crown export to this path first.")
-}
+# if (!file.exists(CROWNS_GEOJSON_PATH)) {
+#   stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
+#        ". Create or copy the Phase 3 crown export to this path first.")
+# }
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
 seg <- readLAS(OUTPUT_LAS_PATH)
