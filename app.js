@@ -79,10 +79,10 @@ function localToLngLat(x, y) {
 
 async function fetchLasBuffer(treeID) {
   const numericTreeID = Number(treeID);
-  const treeIdForFile = Number.isInteger(numericTreeID) && numericTreeID >= 0
+  const treeIDForFile = Number.isInteger(numericTreeID) && numericTreeID >= 0
     ? String(numericTreeID).padStart(lasTreeIdPadWidth, "0")
     : String(treeID);
-  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIdForFile}.las`;
+  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
   throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
@@ -198,11 +198,16 @@ async function init() {
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
-    const maxTreeID = geojsonData.features
+    const numericTreeIDs = geojsonData.features
       .map(f => Number(f.properties?.treeID))
-      .filter(id => Number.isInteger(id) && id >= 0)
-      .reduce((max, id) => (id > max ? id : max), 0);
-    lasTreeIdPadWidth = String(maxTreeID).length;
+      .filter(id => Number.isInteger(id) && id >= 0);
+    if (numericTreeIDs.length > 0) {
+      const maxTreeID = numericTreeIDs.reduce(
+        (max, id) => (id > max ? id : max),
+        numericTreeIDs[0]
+      );
+      lasTreeIdPadWidth = String(maxTreeID).length;
+    }
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
     const cell = document.createElement("td");
