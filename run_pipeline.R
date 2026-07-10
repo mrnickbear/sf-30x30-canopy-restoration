@@ -27,11 +27,9 @@
 #   1. Start the server and save its handle
 #   my_server <- servr::httd(port = 8080)
 #   Then browse to http://localhost:8080/
-#   2. When you are done, shut down only that specific server
+#   # 2. When you are done, shut down only that specific server
 #   servr::daemon_stop(my_server)
 
-# 2. When you are done, shut down only that specific server
-# servr::daemon_stop(my_server)
 
 # ---- Configuration ----
 # Clear the global environment, then load shared settings.
