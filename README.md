@@ -6,6 +6,8 @@ map invasive ivy, blackberry thickets, and senescent eucalyptus.  The output
 will support field interventions for California's 30×30 grant goals of conserving
 at least 30% of the state land and coastal waters by 2030
 
+Workplan (private)
+https://gemini.google.com/app/effff956bd44dc04
 ---
 
 ## Pipeline overview
