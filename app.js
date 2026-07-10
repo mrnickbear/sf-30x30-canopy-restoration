@@ -15,8 +15,8 @@ const DEFAULT_ZOOM    = 18;
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const TREE_ID_PAD_WIDTH_PATH       = "data/web_point_clouds/tree_id_pad_width.txt";
-const MAX_TREE_ID_PAD_WIDTH        = 12;
-let lasTreeIdPadWidth              = 1;
+const MAX_TREE_ID_PAD_WIDTH        = 4;
+//let lasTreeIdPadWidth              = 1;
 
 // LAS parsing constants
 // Standard point record size (bytes) indexed by point data format 0–10 (ASPRS LAS 1.4 spec)
@@ -83,7 +83,7 @@ function treeIdWidthForLas(id) {
   return id < 0 ? String(Math.abs(id)).length + 1 : String(id).length;
 }
 
-function formatTreeIdForLasFile(treeID, padWidth = lasTreeIdPadWidth) {
+function formatTreeIdForLasFile(treeID, padWidth = MAX_TREE_ID_PAD_WIDTH) {
   const numericTreeID = Number(treeID);
   if (!Number.isInteger(numericTreeID)) return String(treeID);
 
@@ -95,18 +95,6 @@ function formatTreeIdForLasFile(treeID, padWidth = lasTreeIdPadWidth) {
   return absTreeIdStr.padStart(padWidth, "0");
 }
 
-async function loadLasTreeIdPadWidth() {
-  const response = await fetch(TREE_ID_PAD_WIDTH_PATH);
-  if (!response.ok) return false;
-  const fileText = (await response.text()).trim();
-  const parsedWidth = Number.parseInt(fileText, 10);
-  if (!Number.isInteger(parsedWidth) || parsedWidth < 1 || parsedWidth > MAX_TREE_ID_PAD_WIDTH) {
-    console.warn(`Invalid tree_id_pad_width.txt value "${fileText}". Falling back to crowns.geojson treeID width.`);
-    return false;
-  }
-  lasTreeIdPadWidth = parsedWidth;
-  return true;
-}
 
 async function fetchLasBuffer(treeID) {
   const treeIDForFile = formatTreeIdForLasFile(treeID);
@@ -227,17 +215,7 @@ async function init() {
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
     const loadedPadWidth = await loadLasTreeIdPadWidth();
-    if (!loadedPadWidth) {
-      const numericTreeIDs = geojsonData.features
-        .map(f => Number(f.properties?.treeID))
-        .filter(id => Number.isInteger(id));
-      if (numericTreeIDs.length > 0) {
-        lasTreeIdPadWidth = numericTreeIDs.reduce(
-          (maxWidth, id) => Math.max(maxWidth, treeIdWidthForLas(id)),
-          1
-        );
-      }
-    }
+    
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
     const cell = document.createElement("td");
