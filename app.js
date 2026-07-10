@@ -14,6 +14,7 @@ const DEFAULT_ZOOM    = 18;
 // 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
+const TREE_ID_PAD_WIDTH_PATH       = `${WEB_POINT_CLOUD_DIR}/tree_id_pad_width.txt`;
 let lasTreeIdPadWidth              = 1;
 
 // LAS parsing constants
@@ -91,6 +92,16 @@ function formatTreeIdForLasFile(treeID, padWidth = lasTreeIdPadWidth) {
     return `-${absTreeIdStr.padStart(absWidth, "0")}`;
   }
   return absTreeIdStr.padStart(padWidth, "0");
+}
+
+async function loadLasTreeIdPadWidth() {
+  const response = await fetch(TREE_ID_PAD_WIDTH_PATH);
+  if (!response.ok) return false;
+  const fileText = (await response.text()).trim();
+  const parsedWidth = Number.parseInt(fileText, 10);
+  if (!Number.isInteger(parsedWidth) || parsedWidth < 1) return false;
+  lasTreeIdPadWidth = parsedWidth;
+  return true;
 }
 
 async function fetchLasBuffer(treeID) {
@@ -211,14 +222,17 @@ async function init() {
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
-    const numericTreeIDs = geojsonData.features
-      .map(f => Number(f.properties?.treeID))
-      .filter(id => Number.isInteger(id));
-    if (numericTreeIDs.length > 0) {
-      lasTreeIdPadWidth = numericTreeIDs.reduce(
-        (maxWidth, id) => Math.max(maxWidth, treeIdWidthForLas(id)),
-        1
-      );
+    const loadedPadWidth = await loadLasTreeIdPadWidth();
+    if (!loadedPadWidth) {
+      const numericTreeIDs = geojsonData.features
+        .map(f => Number(f.properties?.treeID))
+        .filter(id => Number.isInteger(id));
+      if (numericTreeIDs.length > 0) {
+        lasTreeIdPadWidth = numericTreeIDs.reduce(
+          (maxWidth, id) => Math.max(maxWidth, treeIdWidthForLas(id)),
+          1
+        );
+      }
     }
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);

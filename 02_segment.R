@@ -157,6 +157,9 @@ if (length(existing_outputs) > 0) {
 }
 
 max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
+tree_id_pad_width_path <- file.path(WEB_POINT_CLOUD_DIR, "tree_id_pad_width.txt")
+writeLines(as.character(max_tree_id_digits), tree_id_pad_width_path)
+message("Wrote tree_id_pad_width.txt to: ", tree_id_pad_width_path)
 written <- 0L
 # Maps crown treeID (character) -> LAS segment treeID (integer)
 # Written to crown_las_map.json so app.js can colour the correct tree.
