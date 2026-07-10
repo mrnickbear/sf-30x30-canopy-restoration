@@ -101,13 +101,16 @@ function lasUrls(treeID) {
 }
 
 async function fetchLasBuffer(treeID) {
-  let lastError = null;
-  for (const url of lasUrls(treeID)) {
+  const urls = lasUrls(treeID);
+  const failedAttempts = [];
+  for (const url of urls) {
     const response = await fetch(url);
     if (response.ok) return response.arrayBuffer();
-    lastError = new Error(`HTTP ${response.status} – ${response.statusText}`);
+    failedAttempts.push(`${url} -> HTTP ${response.status} - ${response.statusText}`);
   }
-  throw (lastError || new Error("Point cloud file not found"));
+  throw new Error(
+    `Failed to load point cloud for tree ${treeID}. Attempts: ${failedAttempts.join("; ")}`
+  );
 }
 
 // ── Shared state ──────────────────────────────────────────────
@@ -702,11 +705,11 @@ let show3DGeneration = 0;
 // The per-tree LAS file already includes all points within WEB_POINT_CLOUD_BUFFER_M
 // of the treetop. Points whose treeID extra byte matches the selected tree are
 // coloured viridis by elevation; all other points are rendered grey.
-async function show3D(id) {
+async function show3D(selectedTreeID) {
   const generation = ++show3DGeneration;
 
   const feature = geojsonData.features.find(
-    f => String(f.properties?.treeID) === String(id)
+    f => String(f.properties?.treeID) === String(selectedTreeID)
   );
   if (!feature) return;
   const props = feature.properties;
@@ -740,17 +743,26 @@ async function show3D(id) {
     // crown treeID in crowns.geojson.  crownLasMap translates crown ID → LAS ID
     // so the correct segment is highlighted in viridis.
     // Use `in` rather than `??` to correctly handle a hypothetical LAS treeID of 0.
-    const hasTID    = rawPts.some(p => p.treeID !== null);
-    let lasTreeID   = Number(id);
-    if (
-      hasTID &&
-      Number.isFinite(lasTreeID) &&
-      !rawPts.some(p => p.treeID === lasTreeID) &&
-      String(id) in crownLasMap
-    ) {
-      lasTreeID = Number(crownLasMap[String(id)]);
+    let lasTreeID = Number(selectedTreeID);
+    let hasTreeIDData = false;
+    let hasSelectedTreeID = false;
+    for (const p of rawPts) {
+      if (p.treeID === null) continue;
+      hasTreeIDData = true;
+      if (Number.isFinite(lasTreeID) && p.treeID === lasTreeID) {
+        hasSelectedTreeID = true;
+        break;
+      }
     }
-    const canFilterByTreeID = hasTID && Number.isFinite(lasTreeID);
+    if (
+      hasTreeIDData &&
+      Number.isFinite(lasTreeID) &&
+      !hasSelectedTreeID &&
+      String(selectedTreeID) in crownLasMap
+    ) {
+      lasTreeID = Number(crownLasMap[String(selectedTreeID)]);
+    }
+    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID);
 
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
@@ -773,14 +785,14 @@ async function show3D(id) {
       data:        pts,
       getPosition: d => d.position,
       getColor:    d => {
-        if (canFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
+        if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
           return [160, 160, 160, 160]; // surrounding context: grey
         }
         const t = (d.z - zMin) / zRange;
         return [...viridisColor(t), 255]; // selected tree: viridis by elevation
       },
       pointSize: 2,
-      updateTriggers: { getColor: [lasTreeID, canFilterByTreeID] },
+      updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
     });
 
     const layers = showBasemap
