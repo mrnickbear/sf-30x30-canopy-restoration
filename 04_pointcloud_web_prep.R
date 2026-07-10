@@ -20,15 +20,18 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
        ". Run 02_segment.R first.")
 }
 
-if (!file.exists(CROWNS_GEOJSON_PATH)) {
-  stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
-       ". Create or copy the Phase 3 crown export to this path first.")
-}
+# if (!file.exists(CROWNS_GEOJSON_PATH)) {
+#   stop("Crown polygons not found at: ", CROWNS_GEOJSON_PATH,
+#        ". Create or copy the Phase 3 crown export to this path first.")
+# }
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
-seg_snags <- readLAS(OUTPUT_LAS_PATH)
+seg <- readLAS(OUTPUT_LAS_PATH)
 
-if (is.null(seg_snags) || nrow(seg_snags@data) == 0) {
+# plot(seg, color = "treeID") #This is the ID we need to use consistently!!
+
+
+if (is.null(seg) || nrow(seg@data) == 0) {
   stop("Segmented LAS is empty: ", OUTPUT_LAS_PATH)
 }
 
@@ -52,6 +55,7 @@ crowns_above_threshold <- subset(
   crowns,
   ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M
 )
+
 if (nrow(crowns_above_threshold) == 0) {
   stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
        " m in ", CROWNS_GEOJSON_PATH)
@@ -65,7 +69,7 @@ tree_points <- st_sf(
       crowns_above_threshold$XTOP,
       crowns_above_threshold$YTOP
     ),
-    crs = st_crs(seg_snags)
+    crs = st_crs(seg)
   )
 )
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
@@ -94,7 +98,7 @@ for (i in seq_len(nrow(clip_windows))) {
     sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
   )
 
-  clipped_las <- clip_roi(seg_snags, clip_windows[i, ])
+  clipped_las <- clip_roi(seg, clip_windows[i, ])
   if (is.null(clipped_las) || nrow(clipped_las@data) == 0) {
     message("Skipping tree ", tree_id, ": no points found in buffered clip.")
     next
