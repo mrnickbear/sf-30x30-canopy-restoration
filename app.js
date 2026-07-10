@@ -122,8 +122,8 @@ async function loadDanTrail() {
     const coordEl = doc.querySelector("coordinates");
     if (!coordEl) return null;
     danTrailCoords = coordEl.textContent.trim().split(/\s+/).map(triplet => {
-      const [lon, lat, z] = triplet.split(",").map(Number);
-      return [lon, lat, z];
+      const [lon, lat] = triplet.split(",").map(Number);
+      return [lon, lat, 0];  // force z=0; KML GPS altitudes (~140 m ASL) would float above normalized-height LAS
     });
   } catch (err) {
     console.warn("Dan's Lost Trail KML could not be loaded:", err);
