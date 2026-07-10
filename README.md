@@ -55,10 +55,14 @@ Edit `USE_CUSTOM_CIRCLE` in `config.R`:
 
 ## Web dashboard
 
-`index.html` is a static Leaflet + Deck.gl dashboard that reads
-`data/vector/crowns.geojson` at runtime.  Because browsers block
-`fetch()` on `file://` URLs you must serve the project over HTTP — even
-locally.
+The project ships two HTML pages:
+
+| File | Purpose |
+|---|---|
+| `index.html` | Landing page — executive summary, methodology, and a CTA button for grant reviewers. |
+| `dashboard.html` | Interactive Leaflet + Deck.gl dashboard that reads `data/vector/crowns.geojson` at runtime. |
+
+Because browsers block `fetch()` on `file://` URLs you must serve the project over HTTP — even locally.
 
 **Quickest way (Python 3, no extra install):**
 

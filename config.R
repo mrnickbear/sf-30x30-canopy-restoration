@@ -57,6 +57,9 @@ BBPR_THRESHOLDS <- matrix(
 # The 2023 LiDAR data is 16-bit, so we rescale: round(I / (2^16 - 1) * MAX_8BIT_INTENSITY).
 MAX_8BIT_INTENSITY <- 255L
 
+# hard-coded in app.js
+max_tree_id_digits <- 4
+
 # ---- Visualization ----
 # SF Pictometry 2024 aerial tile URL (XYZ pattern)
 PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}"
