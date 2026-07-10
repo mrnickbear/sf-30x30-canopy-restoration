@@ -100,7 +100,10 @@ async function loadLasTreeIdPadWidth() {
   if (!response.ok) return false;
   const fileText = (await response.text()).trim();
   const parsedWidth = Number.parseInt(fileText, 10);
-  if (!Number.isInteger(parsedWidth) || parsedWidth < 1 || parsedWidth > MAX_TREE_ID_PAD_WIDTH) return false;
+  if (!Number.isInteger(parsedWidth) || parsedWidth < 1 || parsedWidth > MAX_TREE_ID_PAD_WIDTH) {
+    console.warn(`Invalid tree_id_pad_width.txt value "${fileText}". Falling back to crowns.geojson treeID width.`);
+    return false;
+  }
   lasTreeIdPadWidth = parsedWidth;
   return true;
 }
