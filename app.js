@@ -81,12 +81,12 @@ async function fetchLasBuffer(treeID) {
   const numericTreeID = Number(treeID);
   let treeIDForFile = String(treeID);
   if (Number.isInteger(numericTreeID)) {
-    const absDigits = String(Math.abs(numericTreeID));
+    const absTreeIdStr = String(Math.abs(numericTreeID));
     if (numericTreeID < 0) {
       const absWidth = Math.max(1, lasTreeIdPadWidth - 1);
-      treeIDForFile = `-${absDigits.padStart(absWidth, "0")}`;
+      treeIDForFile = `-${absTreeIdStr.padStart(absWidth, "0")}`;
     } else {
-      treeIDForFile = absDigits.padStart(lasTreeIdPadWidth, "0");
+      treeIDForFile = absTreeIdStr.padStart(lasTreeIdPadWidth, "0");
     }
   }
   const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
