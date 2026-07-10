@@ -6,7 +6,8 @@
 // ── Configuration (mirrors config.R) ──────────────────────────
 const PICTOMETRY_URL =
   "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}";
-const CROWNS_GEOJSON  = "data/vector/crowns.geojson";
+const CROWNS_GEOJSON       = "data/vector/crowns.geojson";
+const DAN_LOST_TRAIL_KML   = "data/vector/dan-s-lost-trail.kml";
 // Default map center: Laguna Honda Hospital (LHH) area, SF
 const DEFAULT_CENTER  = [37.75011333486208, -122.45934823666263];
 const DEFAULT_ZOOM    = 18;
@@ -102,6 +103,32 @@ async function fetchLasBuffer(treeID) {
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
   throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
+}
+
+// ── Dan's Lost Trail KML loader ───────────────────────────────
+// Parses the single LineString in the KML and returns an array of
+// [longitude, latitude, elevation] coordinate triples. Result is cached
+// after the first successful fetch so subsequent show3D() calls are free.
+let danTrailCoords = null;
+
+async function loadDanTrail() {
+  if (danTrailCoords !== null) return danTrailCoords;
+  try {
+    const response = await fetch(DAN_LOST_TRAIL_KML);
+    if (!response.ok) return null;
+    const text = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, "application/xml");
+    const coordEl = doc.querySelector("coordinates");
+    if (!coordEl) return null;
+    danTrailCoords = coordEl.textContent.trim().split(/\s+/).map(triplet => {
+      const [lon, lat, z] = triplet.split(",").map(Number);
+      return [lon, lat, z];
+    });
+  } catch (_) {
+    danTrailCoords = null;
+  }
+  return danTrailCoords;
 }
 
 // ── Shared state ──────────────────────────────────────────────
@@ -706,7 +733,10 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const buffer = await fetchLasBuffer(props.treeID);
+    const [buffer, trailCoords] = await Promise.all([
+      fetchLasBuffer(props.treeID),
+      loadDanTrail(),
+    ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
@@ -764,7 +794,21 @@ async function show3D(selectedTreeID) {
       updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
     });
 
-    const layers = showBasemap
+    // Dan's Lost Trail reference path layer for orientation.
+    // Colour matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
+    const danTrailLayer = trailCoords
+      ? new deck.PathLayer({
+          id:            "dan-lost-trail",
+          data:          [{ path: trailCoords }],
+          getPath:       d => d.path,
+          getColor:      [70, 180, 20, 220],
+          getWidth:      2,
+          widthUnits:    "pixels",
+          pickable:      false,
+        })
+      : null;
+
+    const baseLayers = showBasemap
       ? [
           new deck.TileLayer({
             id:   "pictometry",
@@ -779,9 +823,14 @@ async function show3D(selectedTreeID) {
                 bounds: p.tile.boundingBox.flatMap(c => c),
               }),
           }),
-          pointCloudLayer,
         ]
-      : [pointCloudLayer];
+      : [];
+
+    const layers = [
+      ...baseLayers,
+      ...(danTrailLayer ? [danTrailLayer] : []),
+      pointCloudLayer,
+    ];
 
     // Fly to the selected tree's treetop. Using FlyToInterpolator ensures
     // the camera reliably transitions even when the 3D panel is already open
