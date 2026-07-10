@@ -22,6 +22,10 @@ library(stars)
 library(scales)
 library(FNN)
 
+if (grepl("^(/|[A-Za-z]:[\\\\/])", WEB_POINT_CLOUD_DIR)) {
+  stop("WEB_POINT_CLOUD_DIR must be project-root relative, e.g. 'data/web_point_clouds'.")
+}
+
 # ---- Require las in memory ----
 if (!exists("las")) {
   stop("'las' is not in memory. Run 01_load_data.R first, ",
