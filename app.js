@@ -77,18 +77,24 @@ function localToLngLat(x, y) {
   ];
 }
 
-async function fetchLasBuffer(treeID) {
+function treeIdWidthForLas(id) {
+  return id < 0 ? String(Math.abs(id)).length + 1 : String(id).length;
+}
+
+function formatTreeIdForLasFile(treeID, padWidth = lasTreeIdPadWidth) {
   const numericTreeID = Number(treeID);
-  let treeIDForFile = String(treeID);
-  if (Number.isInteger(numericTreeID)) {
-    const absTreeIdStr = String(Math.abs(numericTreeID));
-    if (numericTreeID < 0) {
-      const absWidth = Math.max(1, lasTreeIdPadWidth - 1);
-      treeIDForFile = `-${absTreeIdStr.padStart(absWidth, "0")}`;
-    } else {
-      treeIDForFile = absTreeIdStr.padStart(lasTreeIdPadWidth, "0");
-    }
+  if (!Number.isInteger(numericTreeID)) return String(treeID);
+
+  const absTreeIdStr = String(Math.abs(numericTreeID));
+  if (numericTreeID < 0) {
+    const absWidth = Math.max(1, padWidth - 1);
+    return `-${absTreeIdStr.padStart(absWidth, "0")}`;
   }
+  return absTreeIdStr.padStart(padWidth, "0");
+}
+
+async function fetchLasBuffer(treeID) {
+  const treeIDForFile = formatTreeIdForLasFile(treeID);
   const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
@@ -210,12 +216,7 @@ async function init() {
       .filter(id => Number.isInteger(id));
     if (numericTreeIDs.length > 0) {
       lasTreeIdPadWidth = numericTreeIDs.reduce(
-        (maxWidth, id) => {
-          const width = id < 0
-            ? String(Math.abs(id)).length + 1
-            : String(id).length;
-          return width > maxWidth ? width : maxWidth;
-        },
+        (maxWidth, id) => Math.max(maxWidth, treeIdWidthForLas(id)),
         1
       );
     }
