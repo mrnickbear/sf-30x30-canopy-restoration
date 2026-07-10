@@ -125,8 +125,8 @@ async function loadDanTrail() {
       const [lon, lat, z] = triplet.split(",").map(Number);
       return [lon, lat, z];
     });
-  } catch (_) {
-    danTrailCoords = null;
+  } catch (err) {
+    console.warn("Dan's Lost Trail KML could not be loaded:", err);
   }
   return danTrailCoords;
 }
@@ -795,7 +795,7 @@ async function show3D(selectedTreeID) {
     });
 
     // Dan's Lost Trail reference path layer for orientation.
-    // Colour matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
+    // Color matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
     const danTrailLayer = trailCoords
       ? new deck.PathLayer({
           id:            "dan-lost-trail",
