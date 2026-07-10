@@ -214,8 +214,7 @@ async function init() {
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
-    const loadedPadWidth = await loadLasTreeIdPadWidth();
-    
+
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
     const cell = document.createElement("td");
