@@ -14,6 +14,7 @@ const DEFAULT_ZOOM    = 18;
 // 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
+let lasTreeIdPadWidth              = 1;
 
 // LAS parsing constants
 // Standard point record size (bytes) indexed by point data format 0–10 (ASPRS LAS 1.4 spec)
@@ -77,7 +78,11 @@ function localToLngLat(x, y) {
 }
 
 async function fetchLasBuffer(treeID) {
-  const url = `${WEB_POINT_CLOUD_DIR}/tree_${String(treeID)}.las`;
+  const numericTreeID = Number(treeID);
+  const treeIdForFile = Number.isInteger(numericTreeID) && numericTreeID >= 0
+    ? String(numericTreeID).padStart(lasTreeIdPadWidth, "0")
+    : String(treeID);
+  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIdForFile}.las`;
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
   throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
@@ -193,6 +198,11 @@ async function init() {
     const res = await fetch(CROWNS_GEOJSON);
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${res.statusText}`);
     geojsonData = await res.json();
+    const maxTreeID = geojsonData.features
+      .map(f => Number(f.properties?.treeID))
+      .filter(id => Number.isInteger(id) && id >= 0)
+      .reduce((max, id) => (id > max ? id : max), 0);
+    lasTreeIdPadWidth = String(maxTreeID).length;
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
     const cell = document.createElement("td");
