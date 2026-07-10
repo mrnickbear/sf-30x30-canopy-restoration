@@ -76,41 +76,11 @@ function localToLngLat(x, y) {
   ];
 }
 
-// Zero-pad width mirrors 04_pointcloud_web_prep.R (max digits of viewable treeIDs).
-// Computed once after geojsonData is loaded; cached in _lasPad.
-let _lasPad = 0;
-function lasPadWidth() {
-  if (_lasPad) return _lasPad;
-  if (!geojsonData) return 2;
-  for (const f of geojsonData.features) {
-    if (is3DViewable(f.properties?.ZTOP)) {
-      _lasPad = Math.max(_lasPad, String(f.properties.treeID ?? "").length);
-    }
-  }
-  return _lasPad || 2;
-}
-
-function lasUrls(treeID) {
-  const rawID = String(treeID);
-  const paddedID = rawID.padStart(lasPadWidth(), "0");
-  const urls = [`${WEB_POINT_CLOUD_DIR}/tree_${rawID}.las`];
-  if (paddedID !== rawID) {
-    urls.push(`${WEB_POINT_CLOUD_DIR}/tree_${paddedID}.las`);
-  }
-  return urls;
-}
-
 async function fetchLasBuffer(treeID) {
-  const urls = lasUrls(treeID);
-  const failedAttempts = [];
-  for (const url of urls) {
-    const response = await fetch(url);
-    if (response.ok) return response.arrayBuffer();
-    failedAttempts.push(`${url} -> HTTP ${response.status} - ${response.statusText}`);
-  }
-  throw new Error(
-    `Failed to load point cloud for tree ${treeID}. Attempts: ${failedAttempts.join("; ")}`
-  );
+  const url = `${WEB_POINT_CLOUD_DIR}/tree_${String(treeID)}.las`;
+  const response = await fetch(url);
+  if (response.ok) return response.arrayBuffer();
+  throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
 }
 
 // ── Shared state ──────────────────────────────────────────────
@@ -125,12 +95,6 @@ let sortDir        = "desc";
 let searchQuery    = "";
 let deckGL         = null;
 let showBasemap    = true;
-
-// Maps crown treeID (string) → LAS segment treeID (number).
-// Loaded from crown_las_map.json written by 04_pointcloud_web_prep.R.
-// The LAS point-record treeID (from segment_trees) is not always the same
-// as the crown treeID in crowns.geojson; this map resolves the difference.
-let crownLasMap    = {};  // populated by init()
 
 // ── Utility: normalise height value ───────────────────────────
 function heightNorm(z) {
@@ -242,14 +206,6 @@ async function init() {
     tbody.appendChild(tr);
     return;
   }
-
-  // Load the crown → LAS treeID mapping produced by 04_pointcloud_web_prep.R.
-  // Failure is non-fatal: the map stays empty and treeID matching falls back to
-  // using the crown treeID directly (works when treeIDs happen to match).
-  try {
-    const mapRes = await fetch(`${WEB_POINT_CLOUD_DIR}/crown_las_map.json`);
-    if (mapRes.ok) crownLasMap = await mapRes.json();
-  } catch (_) { /* ignore — 3D treeID colouring will fall back gracefully */ }
 
   // Compute height extent from ZTOP
   const heights = geojsonData.features
@@ -739,11 +695,8 @@ async function show3D(selectedTreeID) {
     // XY: geographic 1:1 scale via the affine transform below.
     // Z:  elevation in metres, used as-is so distances are not distorted.
     //
-    // The LAS point-record treeID (from segment_trees) may differ from the
-    // crown treeID in crowns.geojson.  crownLasMap translates crown ID → LAS ID
-    // so the correct segment is highlighted in viridis.
-    // Use `in` rather than `??` to correctly handle a hypothetical LAS treeID of 0.
-    let lasTreeID = Number(selectedTreeID);
+    // treeID in crowns.geojson matches the clipped LAS filename and tree segment ID.
+    const lasTreeID = Number(selectedTreeID);
     let hasTreeIDData = false;
     let hasSelectedTreeID = false;
     for (const p of rawPts) {
@@ -754,15 +707,8 @@ async function show3D(selectedTreeID) {
         break;
       }
     }
-    if (
-      hasTreeIDData &&
-      Number.isFinite(lasTreeID) &&
-      !hasSelectedTreeID &&
-      String(selectedTreeID) in crownLasMap
-    ) {
-      lasTreeID = Number(crownLasMap[String(selectedTreeID)]);
-    }
-    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID);
+    const selectedTreeSegmentNotFoundInLas = hasTreeIDData && Number.isFinite(lasTreeID) && !hasSelectedTreeID;
+    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID) && hasSelectedTreeID;
 
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
@@ -831,7 +777,11 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
+    if (selectedTreeSegmentNotFoundInLas) {
+      setStatus(`⚠ Tree ${props.treeID} segment ID not found in LAS; showing full buffered cloud (${n.toLocaleString()} points).`);
+    } else {
+      setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
+    }
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
