@@ -14,7 +14,8 @@ const DEFAULT_ZOOM    = 18;
 // 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
-const TREE_ID_PAD_WIDTH_PATH       = `${WEB_POINT_CLOUD_DIR}/tree_id_pad_width.txt`;
+const TREE_ID_PAD_WIDTH_PATH       = "data/web_point_clouds/tree_id_pad_width.txt";
+const MAX_TREE_ID_PAD_WIDTH        = 12;
 let lasTreeIdPadWidth              = 1;
 
 // LAS parsing constants
@@ -99,7 +100,7 @@ async function loadLasTreeIdPadWidth() {
   if (!response.ok) return false;
   const fileText = (await response.text()).trim();
   const parsedWidth = Number.parseInt(fileText, 10);
-  if (!Number.isInteger(parsedWidth) || parsedWidth < 1) return false;
+  if (!Number.isInteger(parsedWidth) || parsedWidth < 1 || parsedWidth > MAX_TREE_ID_PAD_WIDTH) return false;
   lasTreeIdPadWidth = parsedWidth;
   return true;
 }
