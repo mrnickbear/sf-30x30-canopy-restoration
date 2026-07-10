@@ -15,6 +15,7 @@ const DEFAULT_ZOOM    = 18;
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const TREE_ID_PAD_WIDTH_PATH       = WEB_POINT_CLOUD_DIR + "/tree_id_pad_width.txt";
+// 32-bit integer treeIDs are at most 11 chars including sign; 12 is a safe hard upper bound.
 const MAX_TREE_ID_PAD_WIDTH        = 12;
 let lasTreeIdPadWidth              = 1;
 

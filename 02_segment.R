@@ -22,7 +22,8 @@ library(stars)
 library(scales)
 library(FNN)
 
-if (grepl("^(/|[A-Za-z]:[\\\\/])", WEB_POINT_CLOUD_DIR)) {
+absolute_path_pattern <- "^(/|[A-Za-z]:[\\\\/])" # Unix "/" or Windows drive-letter absolute path
+if (grepl(absolute_path_pattern, WEB_POINT_CLOUD_DIR)) {
   stop("WEB_POINT_CLOUD_DIR must be project-root relative, e.g. 'data/web_point_clouds'.")
 }
 
