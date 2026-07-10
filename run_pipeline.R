@@ -31,7 +31,7 @@
 #   servr::daemon_stop(my_server)
 
 # 2. When you are done, shut down only that specific server
-servr::daemon_stop(my_server)
+# servr::daemon_stop(my_server)
 
 # ---- Configuration ----
 # Clear the global environment, then load shared settings.

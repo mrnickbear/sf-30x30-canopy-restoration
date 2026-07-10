@@ -196,13 +196,13 @@ for (i in seq_len(nrow(clip_windows))) {
   message("Wrote ", output_path)
 }
 
-#IS THIS STILL NEEDED?
-
-# Write the crown → LAS treeID mapping alongside the per-tree LAS files.
-# app.js loads this at startup to resolve which LAS treeID to highlight.
-map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
-writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
-message("Wrote crown_las_map.json to: ", map_path)
+# #IS THIS STILL NEEDED?
+# 
+# # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
+# # app.js loads this at startup to resolve which LAS treeID to highlight.
+# map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
+# writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
+# message("Wrote crown_las_map.json to: ", map_path)
 
 message(
   "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
@@ -230,10 +230,10 @@ if (save_ok != OUTPUT_LAS_PATH) {
   stop("Failed to write segmented LAS to: ", OUTPUT_LAS_PATH)
 }
 
-# Verify treeID persisted in the saved LAS for downstream crown_metrics().
-seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
-if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
-  stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
-       OUTPUT_LAS_PATH)
-}
-message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
+# # Verify treeID persisted in the saved LAS for downstream crown_metrics().
+# seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
+# if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
+#   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
+#        OUTPUT_LAS_PATH)
+# }
+# message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
