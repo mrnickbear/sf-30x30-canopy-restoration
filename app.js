@@ -79,9 +79,16 @@ function localToLngLat(x, y) {
 
 async function fetchLasBuffer(treeID) {
   const numericTreeID = Number(treeID);
-  const treeIDForFile = Number.isInteger(numericTreeID)
-    ? String(numericTreeID).padStart(lasTreeIdPadWidth, "0")
-    : String(treeID);
+  let treeIDForFile = String(treeID);
+  if (Number.isInteger(numericTreeID)) {
+    const absDigits = String(Math.abs(numericTreeID));
+    if (numericTreeID < 0) {
+      const absWidth = Math.max(1, lasTreeIdPadWidth - 1);
+      treeIDForFile = `-${absDigits.padStart(absWidth, "0")}`;
+    } else {
+      treeIDForFile = absDigits.padStart(lasTreeIdPadWidth, "0");
+    }
+  }
   const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
@@ -202,11 +209,15 @@ async function init() {
       .map(f => Number(f.properties?.treeID))
       .filter(id => Number.isInteger(id));
     if (numericTreeIDs.length > 0) {
-      const maxTreeID = numericTreeIDs.reduce(
-        (max, id) => (id > max ? id : max),
-        numericTreeIDs[0]
+      lasTreeIdPadWidth = numericTreeIDs.reduce(
+        (maxWidth, id) => {
+          const width = id < 0
+            ? String(Math.abs(id)).length + 1
+            : String(id).length;
+          return width > maxWidth ? width : maxWidth;
+        },
+        1
       );
-      lasTreeIdPadWidth = String(maxTreeID).length;
     }
   } catch (err) {
     setStatus(`⚠ Could not load crowns.geojson: ${err.message}`);
