@@ -576,7 +576,10 @@ function initDeckGL() {
     canvas,
     width:  "100%",
     height: "100%",
-    controller: true,
+    controller: {
+      touchZoom:   true,   // pinch to zoom
+      touchRotate: true,   // two-finger opposite = rotate; two-finger same direction = tilt
+    },
     initialViewState: { ...DECK_DEFAULT_VIEW },
     onViewStateChange: ({ viewState: vs }) => {
       // Track current view state for the reset button only; do NOT call
