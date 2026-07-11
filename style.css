@@ -344,6 +344,9 @@ html, body {
 }
 .deck-controls button:hover { background: var(--bg-hover); }
 
+/* Visual separator before the tilt buttons */
+#btn-tilt-up { margin-left: 6px; }
+
 .deck-warning {
   position: absolute;
   top: 12px;
