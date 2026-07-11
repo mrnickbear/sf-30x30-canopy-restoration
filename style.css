@@ -384,6 +384,25 @@ html, body {
   pointer-events: none;
 }
 
+/* ── Mobile layout (≤ 640px): map/3D on top (75%), table on bottom (25%) ── */
+@media (max-width: 640px) {
+  .split-pane {
+    flex-direction: column;
+  }
+  .map-wrap {
+    flex: 3 1 0%;
+    min-width: 0;
+    min-height: 0;
+  }
+  .table-wrap {
+    width: 100%;
+    flex: 1 1 0%;
+    min-height: 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
+
 /* ── Status bar ── */
 .status-bar {
   height: var(--footer-h);
