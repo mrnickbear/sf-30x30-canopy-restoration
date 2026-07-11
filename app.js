@@ -601,6 +601,24 @@ function initDeckGL() {
     showBasemap = !showBasemap;
     if (deckHasLayers && selectedId) show3D(selectedId);
   });
+
+  const TILT_STEP  = 15;   // degrees per tap
+  const PITCH_MIN  =  0;
+  const PITCH_MAX  = 85;
+
+  document.getElementById("btn-tilt-up").addEventListener("click", () => {
+    const newPitch = Math.min(PITCH_MAX, (currentViewState.pitch || 0) + TILT_STEP);
+    const vs = { ...currentViewState, pitch: newPitch, transitionDuration: 300 };
+    currentViewState = vs;
+    deckGL.setProps({ initialViewState: vs });
+  });
+
+  document.getElementById("btn-tilt-down").addEventListener("click", () => {
+    const newPitch = Math.max(PITCH_MIN, (currentViewState.pitch || 0) - TILT_STEP);
+    const vs = { ...currentViewState, pitch: newPitch, transitionDuration: 300 };
+    currentViewState = vs;
+    deckGL.setProps({ initialViewState: vs });
+  });
 }
 
 // ── Native binary LAS parser (no CDN / no WASM required) ─────
