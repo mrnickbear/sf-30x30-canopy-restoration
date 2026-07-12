@@ -809,12 +809,13 @@ async function show3D(selectedTreeID) {
       data:        pts,
       getPosition: d => d.position,
       getColor:    d => {
-        // Normalise intensity (0–65535) to a brightness factor 0.5–1.0.
-        // Falls back to 1.0 when intensity is absent / zero.
+        // Normalise intensity (0–65535; 65535 = max uint16) to a brightness
+        // factor 0.5–1.0. Falls back to 1.0 when intensity is absent / zero.
         const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
 
         if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
           // Surrounding context: intensity-dimmed grey, semi-transparent.
+          // 150 is chosen as a mid-grey base that remains legible over dark basemaps.
           const v = Math.round(150 * bright);
           return [v, v, v, 140];
         }
