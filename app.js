@@ -648,6 +648,10 @@ function parseLAS(buffer) {
     numPoints = Number(dv.getBigUint64(247, true));
   }
 
+  // Source: ASPRS LAS Public Header Block (LAS 1.0–1.4), where these six
+  // fields are defined at fixed byte offsets: X/Y/Z scale factors (131/139/147)
+  // and X/Y/Z offsets (155/163/171). They come from each LAS file's header,
+  // not from project-specific constants.
   // Scale factors and offsets for coordinate de-quantisation (offsets 131–178)
   const xScale = dv.getFloat64(131, true);  // offset 131: X scale factor
   const yScale = dv.getFloat64(139, true);  // offset 139: Y scale factor
