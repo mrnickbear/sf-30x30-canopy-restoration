@@ -196,6 +196,7 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
   
+  # Transform sf objects to WGS84 (EPSG:4326) for web mapping
   writeLAS(st_transform(clipped_las, 4326), output_path, index = FALSE)
   written <- written + 1L
   message("Wrote ", output_path)
