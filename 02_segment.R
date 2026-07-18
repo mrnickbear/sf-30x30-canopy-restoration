@@ -70,7 +70,7 @@ knn_result <- get.knnx(data = coords_thinned, query = coords_orig, k = 1)
 
 # 5. Extract the treeIDs using the neighbor indices and inject into original cloud
 matched_tree_ids <- seg_thinned$treeID[knn_result$nn.index]
-seg <- add_attribute(nlas, matched_tree_ids, "treeID")
+seg <- add_attribute(nlas, matched_tree_ids, "treeID") %>% st_set_crs(cs13_m)
 
 
 # seg <- segment_trees(las = nlas, algorithm = li2012(dt1 = 1.2, dt2 = 1.5, R = 10, speed_up = 15))
@@ -196,7 +196,9 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
   
-  writeLAS(clipped_las, output_path, index = FALSE)
+
+  
+  writeLAS(st_transform(clipped_las, 4326), output_path, index = FALSE)
   written <- written + 1L
   message("Wrote ", output_path)
 }
@@ -216,7 +218,7 @@ message(
 
 
 # Transform sf objects to WGS84 (EPSG:4326) for web mapping
-treetops_web <- st_transform(tree_points, 4326)
+# treetops_web <- st_transform(tree_points, 4326)
 crowns_web <- st_transform(crown_outlines, 4326)
 
 # 2. Export to GeoJSON

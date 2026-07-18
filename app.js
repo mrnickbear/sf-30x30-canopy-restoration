@@ -29,16 +29,7 @@ const EXTRA_BYTES_DESCRIPTOR_SIZE = 192; // bytes per extra-bytes descriptor (AS
 // R's NA_integer_ sentinel: 32-bit signed minimum, written by lidR for unclassified treeID
 const R_NA_INTEGER = -2147483648;
 
-// Affine transform: local LAS CRS → WGS84
-// Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
-// lon = LON_A*X + LON_B*Y + LON_C
-// lat = LAT_A*X + LAT_B*Y + LAT_C
-const LON_A =  1.56396015e-6;
-const LON_B = -1.26950611e-6;
-const LON_C = -122.50258576;
-const LAT_A =  4.80157997e-7;
-const LAT_B =  3.33684245e-6;
-const LAT_C =  37.64670385;
+
 
 // ── Viridis-like 5-stop colour scale ──────────────────────────
 const VIRIDIS = [
@@ -74,10 +65,7 @@ function is3DViewable(ztop) {
 
 // Convert local LAS CRS coordinates to [longitude, latitude]
 function localToLngLat(x, y) {
-  return [
-    LON_A * x + LON_B * y + LON_C,
-    LAT_A * x + LAT_B * y + LAT_C,
-  ];
+  return [x, y]; // Pass coordinates straight through
 }
 
 function treeIdWidthForLas(id) {
