@@ -85,7 +85,7 @@ if (length(existing_outputs) > 0) {
   file.remove(existing_outputs)
 }
 
-max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
+# max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
 written <- 0L
 # Maps crown treeID (character) -> LAS segment treeID (integer)
 # Written to crown_las_map.json so app.js can colour the correct tree.
@@ -134,3 +134,10 @@ message(
   "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
   WEB_POINT_CLOUD_DIR
 )
+
+# #tests
+# library(mapview)
+# mapview(clip_windows)
+# 
+# test <- readLAS("data/web_point_clouds/tree_37.las")
+# plot(test)
