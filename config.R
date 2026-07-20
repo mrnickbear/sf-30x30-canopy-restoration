@@ -32,9 +32,9 @@ USE_CUSTOM_CIRCLE <- TRUE
 AOI_KML_PATH      <- "data/vector/updatedAA.kml"
 
 # DLT_040 test circle parameters (used when USE_CUSTOM_CIRCLE = TRUE)
-CIRCLE_CENTER_X <- 47200
-CIRCLE_CENTER_Y <- 23900
-CIRCLE_RADIUS   <- 40   # meters
+CIRCLE_CENTER_X <- 47215
+CIRCLE_CENTER_Y <- 23915
+CIRCLE_RADIUS   <- 20   # meters  #Smaller for testing TreeLS
 
 # ---- Processing Parameters ----
 CHM_RES          <- 0.5   # Canopy height model resolution (meters)

@@ -37,3 +37,6 @@ if (USE_CUSTOM_CIRCLE) {
 message("Clipping LiDAR to analysis area...")
 las <- clip_roi(ctg, aa)
 message("Done. LAS object has ", nrow(las@data), " points.")
+
+library(mapview)
+mapview(aa)

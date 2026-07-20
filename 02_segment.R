@@ -21,6 +21,10 @@ library(sf)
 library(stars)
 library(scales)
 library(FNN)
+# library(crownsegmentr)  Recommends 5-20 ppm
+library(TreeLS) #segmentation from bottom up using stems/branches
+# library(remotes)
+# library(usethis)
 
 # ---- Require las in memory ----
 if (!exists("las")) {
@@ -52,12 +56,21 @@ nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
 # message("Segmenting trees (li2012)... This may take several minutes.")
 # seg <- segment_trees(las = nlas, algorithm = li2012())
 
+
+#lidr approach
 # 1. Thin the point cloud to a uniform 20-30 points per sq meter for structural tracking
 # homogenization ensures a consistent density across both open and dense canopies
-seg_thinned <- decimate_points(nlas, homogenize(density = 25, res = 1))
+seg_thinned <- decimate_points(nlas, homogenize(density = 20, res = 5))
 
-# 2. Segment the thinned cloud (Li algorithm will perform beautifully here)
-seg_thinned <- segment_trees(las = seg_thinned, algorithm = li2012(dt1 = 1.2, dt2 = 1.6, R = 4.0))
+# # 2. Segment the thinned cloud (Li algorithm will perform beautifully here)
+seg_thinned <- segment_trees(las = seg_thinned, algorithm = li2012(dt1 = 1.5, dt2 = 2, R = 2, hmin = 5.0))
+
+plot(seg_thinned, color = "treeID")
+#end lidr
+
+
+
+
 
 # --- NEW: MAP BACK TO ORIGINAL HIGH-RES DATA ---
 
@@ -84,7 +97,7 @@ seg <- add_attribute(nlas, matched_tree_ids, "treeID") %>% st_set_crs(cs13_m)
 # crown_outlines <- delineate_crowns(seg, attribute = "treeID")
 
 
-x <- plot(seg, color = "treeID")
+# x <- plot(seg, color = "treeID")
 
 
 # # ---- Rescale intensity for snag classification ----
@@ -195,9 +208,30 @@ for (i in seq_len(nrow(clip_windows))) {
       crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
     }
   }
+
+  # plot(clipped_las, color = "treeID")
+  
+  
   
   # Transform sf objects to WGS84 (EPSG:4326) for web mapping
-  writeLAS(st_transform(clipped_las, 4326), output_path, index = FALSE)
+  # ERROR: the transformed points look like a pole
+  clipped_wgs84 <- st_transform(clipped_las, crs = 4326, xoffset = 0, yoffset = 0, zoffset = 0)
+  
+
+  
+  xy <- clipped_wgs84@data[, c("X", "Y")]
+  if (
+    any(!is.finite(xy$X) | !is.finite(xy$Y)) ||
+    any(abs(xy$Y) > 90, na.rm = TRUE) ||
+    any(abs(xy$X) > 180, na.rm = TRUE)
+  ) {
+    stop(
+      "Per-tree LAS export has non-WGS84 coordinates after st_transform(..., 4326). ",
+      "Check CRS assignment for seg/clipped_las (expected EPSG:", cs13_m, ") before transforming."
+    )
+  }
+  writeLAS(clipped_wgs84, output_path, index = FALSE)  
+  
   written <- written + 1L
   message("Wrote ", output_path)
 }
