@@ -101,6 +101,10 @@ for (i in seq_len(nrow(clip_windows))) {
     WEB_POINT_CLOUD_DIR,
     sprintf(paste0("tree_%0", max_tree_id_digits, "d.ply"), tree_id)
   )
+  bg_path <- file.path(
+    WEB_POINT_CLOUD_DIR,
+    sprintf(paste0("bg_tree_%0", max_tree_id_digits, "d.ply"), tree_id)
+  )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
   if (is.null(clipped_las) || nrow(clipped_las@data) == 0) {
@@ -125,7 +129,13 @@ for (i in seq_len(nrow(clip_windows))) {
 
   # writeLAS(clipped_las, output_path, index = FALSE)
   # fwrite(clipped_las@data, output_path) #for CSV, too large
-  vcgPlyWrite(as.matrix(clipped_las@data[, .(X, Y, Z)]), output_path)
+  
+  # Save the target tree
+  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), output_path)
+  
+  # Save the background (all other trees)
+  vcgPlyWrite(as.matrix(clipped_las@data[treeID != tree_id, .(X, Y, Z)]), bg_path)
+  
   
   written <- written + 1L
   message("Wrote ", output_path)
