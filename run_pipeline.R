@@ -49,9 +49,8 @@ FORCE_SEGMENT  <- FALSE
 RUN_LOAD_DATA  <- TRUE
 RUN_SEGMENT    <- FORCE_SEGMENT || !file.exists(OUTPUT_LAS_PATH)
 
-#Consolidation due to treeID not coming through in saved LAS file
-RUN_VISUALIZE  <- FALSE #consolidated with step 2
-RUN_WEB_PREP   <- FALSE #consolidated with step 2
+RUN_VISUALIZE  <- TRUE #consolidated with step 2
+RUN_WEB_PREP   <- TRUE #consolidated with step 2
 
 # ---- Step 1: Load data ----
 if (RUN_LOAD_DATA) {

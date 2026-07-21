@@ -235,25 +235,25 @@ if (save_ok != OUTPUT_LAS_PATH) {
   stop("Failed to write segmented LAS to: ", OUTPUT_LAS_PATH)
 }
 
-# # Verify treeID persisted in the saved LAS for downstream crown_metrics().
-# seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
-# if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
-#   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
-#        OUTPUT_LAS_PATH)
-# }
-# message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
-
-plot(seg, color = "treeID")
-
-#plot seg with treeID color, but highlight a specific treeID (e.g., 37) in yellow and make all other trees faint gray.
-
-# 1. Define your target tree ID
-target_id <- 37
-
-# 2. Build a color vector directly for every point in the point cloud
-# If treeID matches target_id, make it yellow; otherwise, make it faint gray
-point_colors <- ifelse(seg@data$treeID == target_id, "yellow", rgb(0.5, 0.5, 0.5, 0.1))
-
-# 3. Plot using the 'col' argument instead of 'color' or 'palette'
-# This bypasses lidR's attribute name checks completely
-plot(seg, col = point_colors, main = paste("Highlighting Tree", target_id))
+# # # Verify treeID persisted in the saved LAS for downstream crown_metrics().
+# # seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
+# # if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
+# #   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
+# #        OUTPUT_LAS_PATH)
+# # }
+# # message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
+# 
+# plot(seg, color = "treeID")
+# 
+# #plot seg with treeID color, but highlight a specific treeID (e.g., 37) in yellow and make all other trees faint gray.
+# 
+# # 1. Define your target tree ID
+# target_id <- 37
+# 
+# # 2. Build a color vector directly for every point in the point cloud
+# # If treeID matches target_id, make it yellow; otherwise, make it faint gray
+# point_colors <- ifelse(seg@data$treeID == target_id, "yellow", rgb(0.5, 0.5, 0.5, 0.1))
+# 
+# # 3. Plot using the 'col' argument instead of 'color' or 'palette'
+# # This bypasses lidR's attribute name checks completely
+# plot(seg, col = point_colors, main = paste("Highlighting Tree", target_id))

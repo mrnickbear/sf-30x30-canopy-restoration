@@ -14,6 +14,10 @@ source("config.R")
 library(lidR)
 library(sf)
 library(jsonlite)
+# library(data.table) #fwrite
+library(Rvcg) #ply write
+
+
 
 if (!file.exists(OUTPUT_LAS_PATH)) {
   stop("Segmented LAS not found at: ", OUTPUT_LAS_PATH,
@@ -95,7 +99,7 @@ for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.laz"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d.ply"), tree_id)
   )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
@@ -119,7 +123,10 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
 
-  writeLAS(clipped_las, output_path, index = FALSE)
+  # writeLAS(clipped_las, output_path, index = FALSE)
+  # fwrite(clipped_las@data, output_path) #for CSV, too large
+  vcgPlyWrite(as.matrix(clipped_las@data[, .(X, Y, Z)]), output_path)
+  
   written <- written + 1L
   message("Wrote ", output_path)
 }
@@ -131,7 +138,7 @@ writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
 message("Wrote crown_las_map.json to: ", map_path)
 
 message(
-  "Web point cloud prep complete. Wrote ", written, " LAZ file(s) to: ",
+  "Web point cloud prep complete. Wrote ", written, " file(s) to: ",
   WEB_POINT_CLOUD_DIR
 )
 
