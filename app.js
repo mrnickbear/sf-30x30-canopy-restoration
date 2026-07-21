@@ -99,6 +99,7 @@ async function loadLazData(treeID) {
   const data = await load(url, LASLoader, { las: { fp64: true } });
 
   const posArr      = data.attributes.POSITION.value;      // Float64Array: [x0,y0,z0, x1,y1,z1, …]
+  // @loaders.gl/las preserves VLR extra bytes attribute names verbatim; lidR writes "treeID".
   const treeIDArr   = data.attributes.treeID?.value ?? null;   // Int32Array or null
   const intensityArr = data.attributes.intensity?.value ?? null; // Uint16Array or null
 

@@ -7,6 +7,7 @@
 # points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
 # WEB_POINT_CLOUD_DIR as an individual compressed .laz file. The browser loads
 # these files using @loaders.gl/las which supports both LAS and LAZ natively.
+# LAZ compression typically reduces file size by 5–10× vs uncompressed LAS.
 
 source("config.R")
 
