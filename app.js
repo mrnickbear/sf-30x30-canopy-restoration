@@ -88,8 +88,7 @@ const PLY_TYPE_SIZES = {
   double:8, float64:8,
 };
 
-async function loadPlyData(treeID) {
-  const url = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(treeID)}.ply`;
+async function loadPlyData(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status} – ${response.statusText}`);
   const buffer = await response.arrayBuffer();
@@ -681,8 +680,8 @@ function initDeckGL() {
 let show3DGeneration = 0;
 
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable).
-// The per-tree PLY file contains all points within WEB_POINT_CLOUD_BUFFER_M of
-// the treetop, coloured viridis by elevation.
+// Loads tree_XXXX_target.ply (viridis by elevation) and tree_XXXX_background.ply
+// (grey context points) separately, then renders both as Deck.gl PointCloudLayers.
 async function show3D(selectedTreeID) {
   const generation = ++show3DGeneration;
 
@@ -705,77 +704,65 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const [{ pts: rawPts, zMin, zMax }, trailCoords] = await Promise.all([
-      loadPlyData(props.treeID),
+    const plyFileBase   = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}`;
+    const targetUrl     = `${plyFileBase}_target.ply`;
+    const backgroundUrl = `${plyFileBase}_background.ply`;
+
+    const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
+      loadPlyData(targetUrl),
+      loadPlyData(backgroundUrl).catch(() => null),   // background file is optional
       loadDanTrail(),
     ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
-    const n = rawPts.length;
+    const n = rawTargetPts.length;
 
-    // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
-    // XY: geographic 1:1 scale via the affine transform below.
-    // Z:  elevation in metres, used as-is so distances are not distorted.
-    const lasTreeID = Number(selectedTreeID);
-    let hasTreeIDData = false;
-    let hasSelectedTreeID = false;
-    for (const p of rawPts) {
-      if (p.treeID === null) continue;
-      hasTreeIDData = true;
-      if (Number.isFinite(lasTreeID) && p.treeID === lasTreeID) {
-        hasSelectedTreeID = true;
-        break;
-      }
-    }
-    const selectedTreeSegmentNotFoundInLas = hasTreeIDData && Number.isFinite(lasTreeID) && !hasSelectedTreeID;
-    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID) && hasSelectedTreeID;
-
-    const pts = rawPts.map(p => {
-      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID, intensity: p.intensity };
-    });
-
-    const zRange = zMax > zMin ? zMax - zMin : 1;
+    // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale.
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
+    const zRange = zMax > zMin ? zMax - zMin : 1;
 
-    // Update deck-legend labels with point cloud Z range
+    // Update deck-legend labels with target point cloud Z range
     const dMin = document.getElementById("deck-legend-min");
     const dMax = document.getElementById("deck-legend-max");
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
-    // Single layer: selected tree's points → viridis by elevation, intensity-
-    // modulated brightness; all other tree IDs in the buffer → dim grey context.
-    const pointCloudLayer = new deck.PointCloudLayer({
-      id:          "point-cloud",
-      data:        pts,
+    // Target layer: viridis by elevation
+    const targetPts = rawTargetPts.map(p => {
+      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+      return { position: [lon, lat, p.position[2]], z: p.z };
+    });
+
+    const targetLayer = new deck.PointCloudLayer({
+      id:          "point-cloud-target",
+      data:        targetPts,
       getPosition: d => d.position,
       getColor:    d => {
-        // Normalise intensity (0–65535; 65535 = max uint16) to a brightness
-        // factor 0.5–1.0. Falls back to 1.0 when intensity is absent / zero.
-        const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
-
-        if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
-          // Surrounding context: intensity-dimmed grey, semi-transparent.
-          // 150 is chosen as a mid-grey base that remains legible over dark basemaps.
-          const v = Math.round(150 * bright);
-          return [v, v, v, 140];
-        }
-        // Selected tree: viridis by elevation with intensity-based brightness.
-        const t = (d.z - zMin) / zRange;
+        const t   = (d.z - zMin) / zRange;
         const rgb = viridisColor(t);
-        return [
-          Math.round(rgb[0] * bright),
-          Math.round(rgb[1] * bright),
-          Math.round(rgb[2] * bright),
-          255,
-        ];
+        return [rgb[0], rgb[1], rgb[2], 255];
       },
       pointSize: 2,
-      updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
+      updateTriggers: { getColor: [zMin, zRange] },
     });
+
+    // Background layer: grey context points (rendered below target)
+    let bgLayer = null;
+    if (bgResult && bgResult.pts.length > 0) {
+      const bgPts = bgResult.pts.map(p => {
+        const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+        return { position: [lon, lat, p.position[2]] };
+      });
+      bgLayer = new deck.PointCloudLayer({
+        id:          "point-cloud-background",
+        data:        bgPts,
+        getPosition: d => d.position,
+        getColor:    [150, 150, 150, 140],
+        pointSize:   2,
+      });
+    }
 
     // Dan's Lost Trail reference path layer for orientation.
     // Color matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
@@ -812,7 +799,8 @@ async function show3D(selectedTreeID) {
     const layers = [
       ...baseLayers,
       ...(danTrailLayer ? [danTrailLayer] : []),
-      pointCloudLayer,
+      ...(bgLayer ? [bgLayer] : []),
+      targetLayer,
     ];
 
     // Fly to the selected tree's treetop. Using FlyToInterpolator ensures
@@ -832,11 +820,7 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    if (selectedTreeSegmentNotFoundInLas) {
-      setStatus(`⚠ Tree ${props.treeID} segment ID not found in point cloud; showing full buffered cloud (${n.toLocaleString()} points).`);
-    } else {
-      setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
-    }
+    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} target points, height ${props.ZTOP} m`);
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;

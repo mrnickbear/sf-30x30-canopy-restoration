@@ -1,13 +1,13 @@
 # 04_pointcloud_web_prep.R
-# Step 4: Export per-tree web-ready LAZ files for tall trees.
+# Step 4: Export per-tree web-ready PLY files for tall trees.
 #
 # Reads the normalized + segmented LAS from OUTPUT_LAS_PATH and the Phase 3
 # crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
-# per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
-# points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
-# WEB_POINT_CLOUD_DIR as an individual compressed .laz file. The browser loads
-# these files using @loaders.gl/las which supports both LAS and LAZ natively.
-# LAZ compression typically reduces file size by 5–10× vs uncompressed LAS.
+# per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M.  For each tree, two PLY
+# files are written to WEB_POINT_CLOUD_DIR:
+#   tree_XXXX_target.ply     – points belonging to the target tree (treeID match)
+#   tree_XXXX_background.ply – all other points within the buffer
+# The browser renders the target viridis-by-elevation and the background grey.
 
 source("config.R")
 
@@ -82,10 +82,10 @@ if (nrow(clip_windows) == 0) {
 }
 
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
-existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
+existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.ply"))
 if (length(existing_outputs) > 0) {
   message("Removing ", length(existing_outputs),
-          " existing LAZ file(s) from: ", WEB_POINT_CLOUD_DIR)
+          " existing PLY file(s) from: ", WEB_POINT_CLOUD_DIR)
   file.remove(existing_outputs)
 }
 
@@ -97,9 +97,13 @@ crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
-  output_path <- file.path(
+  target_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.ply"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_target.ply"), tree_id)
+  )
+  bg_path <- file.path(
+    WEB_POINT_CLOUD_DIR,
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_background.ply"), tree_id)
   )
   bg_path <- file.path(
     WEB_POINT_CLOUD_DIR,
@@ -112,10 +116,13 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
-  # The treeID attribute in the LAS is assigned by segment_trees() and may not
-  # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
-  # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
-  # highlight the correct segment.
+  # Default: all clipped points go to target, no background split.
+  # Overridden below when treeID data is available and a nearest_tid is found.
+  target_pts <- as.matrix(clipped_las@data[, .(X, Y, Z)])
+  bg_pts     <- NULL
+
+  # Identify the LAS treeID of the point nearest the crown treetop so we can
+  # split target vs background and record the mapping for crown_las_map.json.
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
@@ -124,6 +131,9 @@ for (i in seq_len(nrow(clip_windows))) {
     nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
       crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
+      target_mask <- clipped_las@data$treeID == nearest_tid
+      target_pts  <- as.matrix(clipped_las@data[target_mask,  .(X, Y, Z)])
+      bg_pts      <- as.matrix(clipped_las@data[!target_mask, .(X, Y, Z)])
     }
   }
 
@@ -131,14 +141,19 @@ for (i in seq_len(nrow(clip_windows))) {
   # fwrite(clipped_las@data, output_path) #for CSV, too large
   
   # Save the target tree
-  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), output_path)
+  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
   
   # Save the background (all other trees)
   vcgPlyWrite(as.matrix(clipped_las@data[treeID != tree_id, .(X, Y, Z)]), bg_path)
   
   
+  message("Wrote ", target_path)
+  if (!is.null(bg_pts) && nrow(bg_pts) > 0) {
+    vcgPlyWrite(bg_pts, bg_path)
+    message("Wrote ", bg_path)
+  }
+
   written <- written + 1L
-  message("Wrote ", output_path)
 }
 
 # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
