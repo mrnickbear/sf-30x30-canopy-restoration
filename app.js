@@ -579,6 +579,7 @@ function initDeckGL() {
     controller: {
       touchZoom:   true,   // pinch to zoom
       touchRotate: true,   // two-finger opposite = rotate; two-finger same direction = tilt
+      inertia:     true,   // smooth deceleration after pan / tilt gestures
     },
     initialViewState: { ...DECK_DEFAULT_VIEW },
     onViewStateChange: ({ viewState: vs }) => {
@@ -622,8 +623,9 @@ function initDeckGL() {
 }
 
 // ── Native binary LAS parser (no CDN / no WASM required) ─────
-// Supports LAS 1.0–1.4; reads X/Y/Z and, when present, the per-point treeID
-// extra byte attribute written by lidR's segment_trees().
+// Supports LAS 1.0–1.4; reads X/Y/Z, intensity (uint16 at byte 12 of every
+// point record), and the per-point treeID extra byte attribute written by
+// lidR's segment_trees().
 // Header field offsets follow the ASPRS LAS 1.4-R15 specification.
 function parseLAS(buffer) {
   const dv = new DataView(buffer);
@@ -709,6 +711,9 @@ function parseLAS(buffer) {
     if (z < zMin) zMin = z;
     if (z > zMax) zMax = z;
 
+    // Intensity: uint16 at byte 12 in every LAS point format (0–65535).
+    const intensity = dv.getUint16(base + 12, true);
+
     // Read treeID if the extra bytes descriptor was found.
     // lidR writes treeID as int32; NA_integer_ (-2147483648) means unclassified.
     let treeID = null;
@@ -717,7 +722,7 @@ function parseLAS(buffer) {
       treeID = (raw === R_NA_INTEGER) ? null : raw;
     }
 
-    pts[i] = { position: [x, y, z], z, treeID };
+    pts[i] = { position: [x, y, z], z, treeID, intensity };
   }
 
   return { pts, zMin, zMax };
@@ -785,7 +790,7 @@ async function show3D(selectedTreeID) {
 
     const pts = rawPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID };
+      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID, intensity: p.intensity };
     });
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
@@ -797,18 +802,32 @@ async function show3D(selectedTreeID) {
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
-    // Single layer: selected tree's points → viridis by elevation; all other
-    // tree IDs in the buffer → grey context points.
+    // Single layer: selected tree's points → viridis by elevation, intensity-
+    // modulated brightness; all other tree IDs in the buffer → dim grey context.
     const pointCloudLayer = new deck.PointCloudLayer({
       id:          "point-cloud",
       data:        pts,
       getPosition: d => d.position,
       getColor:    d => {
+        // Normalise intensity (0–65535; 65535 = max uint16) to a brightness
+        // factor 0.5–1.0. Falls back to 1.0 when intensity is absent / zero.
+        const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
+
         if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
-          return [160, 160, 160, 160]; // surrounding context: grey
+          // Surrounding context: intensity-dimmed grey, semi-transparent.
+          // 150 is chosen as a mid-grey base that remains legible over dark basemaps.
+          const v = Math.round(150 * bright);
+          return [v, v, v, 140];
         }
+        // Selected tree: viridis by elevation with intensity-based brightness.
         const t = (d.z - zMin) / zRange;
-        return [...viridisColor(t), 255]; // selected tree: viridis by elevation
+        const rgb = viridisColor(t);
+        return [
+          Math.round(rgb[0] * bright),
+          Math.round(rgb[1] * bright),
+          Math.round(rgb[2] * bright),
+          255,
+        ];
       },
       pointSize: 2,
       updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
@@ -859,7 +878,7 @@ async function show3D(selectedTreeID) {
       longitude:             treetopLon,
       latitude:              treetopLat,
       zoom:                  18,
-      pitch:                  0,
+      pitch:                 45,
       bearing:               0,
       transitionDuration:    600,
       transitionInterpolator: new deck.FlyToInterpolator(),
