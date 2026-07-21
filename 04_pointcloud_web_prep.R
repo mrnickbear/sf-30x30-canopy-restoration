@@ -103,10 +103,6 @@ for (i in seq_len(nrow(clip_windows))) {
   )
   bg_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d_background.ply"), tree_id)
-  )
-  bg_path <- file.path(
-    WEB_POINT_CLOUD_DIR,
     sprintf(paste0("bg_tree_%0", max_tree_id_digits, "d.ply"), tree_id)
   )
 
@@ -116,40 +112,24 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
-  # Default: all clipped points go to target, no background split.
-  # Overridden below when treeID data is available and a nearest_tid is found.
-  target_pts <- as.matrix(clipped_las@data[, .(X, Y, Z)])
-  bg_pts     <- NULL
-
-  # Identify the LAS treeID of the point nearest the crown treetop so we can
-  # split target vs background and record the mapping for crown_las_map.json.
+  # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
-    # Squared distances avoid sqrt; which.min needs only relative ordering.
     dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
     nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
       crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
-      target_mask <- clipped_las@data$treeID == nearest_tid
-      target_pts  <- as.matrix(clipped_las@data[target_mask,  .(X, Y, Z)])
-      bg_pts      <- as.matrix(clipped_las@data[!target_mask, .(X, Y, Z)])
     }
   }
 
-  # writeLAS(clipped_las, output_path, index = FALSE)
-  # fwrite(clipped_las@data, output_path) #for CSV, too large
-  
-  # Save the target tree
+  # Save target (points belonging to this tree) and background (all other points).
   vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
-  
-  # Save the background (all other trees)
-  vcgPlyWrite(as.matrix(clipped_las@data[treeID != tree_id, .(X, Y, Z)]), bg_path)
-  
-  
   message("Wrote ", target_path)
-  if (!is.null(bg_pts) && nrow(bg_pts) > 0) {
-    vcgPlyWrite(bg_pts, bg_path)
+
+  bg_data <- as.matrix(clipped_las@data[treeID != tree_id, .(X, Y, Z)])
+  if (nrow(bg_data) > 0) {
+    vcgPlyWrite(bg_data, bg_path)
     message("Wrote ", bg_path)
   }
 

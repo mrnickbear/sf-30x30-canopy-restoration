@@ -680,7 +680,7 @@ function initDeckGL() {
 let show3DGeneration = 0;
 
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable).
-// Loads tree_XXXX_target.ply (viridis by elevation) and tree_XXXX_background.ply
+// Loads tree_XXXX_target.ply (viridis by elevation) and bg_tree_XXXX.ply
 // (grey context points) separately, then renders both as Deck.gl PointCloudLayers.
 async function show3D(selectedTreeID) {
   const generation = ++show3DGeneration;
@@ -704,9 +704,8 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const plyFileBase   = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}`;
-    const targetUrl     = `${plyFileBase}_target.ply`;
-    const backgroundUrl = `${plyFileBase}_background.ply`;
+    const targetUrl     = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_target.ply`;
+    const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/bg_tree_${formatTreeIdForFile(props.treeID)}.ply`;
 
     const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
       loadPlyData(targetUrl),
