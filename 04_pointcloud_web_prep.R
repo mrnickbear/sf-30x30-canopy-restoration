@@ -112,6 +112,11 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
+  # Default: all clipped points go to target, no background split.
+  # Overridden below when treeID data is available and a nearest_tid is found.
+  target_pts <- as.matrix(clipped_las@data[, .(X, Y, Z)])
+  bg_pts     <- NULL
+
   # Identify the LAS treeID of the point nearest the crown treetop so we can
   # split target vs background and record the mapping for crown_las_map.json.
   if ("treeID" %in% names(clipped_las@data)) {
@@ -125,13 +130,7 @@ for (i in seq_len(nrow(clip_windows))) {
       target_mask <- clipped_las@data$treeID == nearest_tid
       target_pts  <- as.matrix(clipped_las@data[target_mask,  .(X, Y, Z)])
       bg_pts      <- as.matrix(clipped_las@data[!target_mask, .(X, Y, Z)])
-    } else {
-      target_pts <- as.matrix(clipped_las@data[, .(X, Y, Z)])
-      bg_pts     <- NULL
     }
-  } else {
-    target_pts <- as.matrix(clipped_las@data[, .(X, Y, Z)])
-    bg_pts     <- NULL
   }
 
   vcgPlyWrite(target_pts, target_path)

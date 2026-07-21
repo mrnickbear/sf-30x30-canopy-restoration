@@ -704,20 +704,20 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const fileBase  = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}`;
-    const targetUrl = `${fileBase}_target.ply`;
-    const bgUrl     = `${fileBase}_background.ply`;
+    const plyFileBase   = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}`;
+    const targetUrl     = `${plyFileBase}_target.ply`;
+    const backgroundUrl = `${plyFileBase}_background.ply`;
 
-    const [{ pts: targetRaw, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
+    const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
       loadPlyData(targetUrl),
-      loadPlyData(bgUrl).catch(() => null),   // background file is optional
+      loadPlyData(backgroundUrl).catch(() => null),   // background file is optional
       loadDanTrail(),
     ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
-    const n = targetRaw.length;
+    const n = rawTargetPts.length;
 
     // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale.
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
@@ -730,7 +730,7 @@ async function show3D(selectedTreeID) {
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
     // Target layer: viridis by elevation
-    const targetPts = targetRaw.map(p => {
+    const targetPts = rawTargetPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
       return { position: [lon, lat, p.position[2]], z: p.z };
     });
