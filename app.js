@@ -3,6 +3,9 @@
    Leaflet 2D map + Deck.gl 3D view + linked data table
    ============================================================ */
 
+import { LASLoader } from 'https://esm.sh/@loaders.gl/las@3.4.14';
+import { load }      from 'https://esm.sh/@loaders.gl/core@3.4.14';
+
 // ── Configuration (mirrors config.R) ──────────────────────────
 const PICTOMETRY_URL =
   "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictometry2024/MapServer/tile/{z}/{y}/{x}";
@@ -19,13 +22,6 @@ const TREE_ID_PAD_WIDTH_PATH       = "data/web_point_clouds/tree_id_pad_width.tx
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 //let lasTreeIdPadWidth              = 1;
 
-// LAS parsing constants
-// Standard point record size (bytes) indexed by point data format 0–10 (ASPRS LAS 1.4 spec)
-const POINT_FORMAT_SIZE = [20, 28, 26, 34, 57, 63, 30, 36, 38, 59, 67];
-// Extra bytes data_type → byte width (types 1–10; type 0 is undocumented/variable)
-const EXTRA_BYTE_SIZES         = [0, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
-const VLR_HEADER_SIZE          = 54;   // bytes: 2 reserved + 16 userID + 2 recordID + 2 recLen + 32 desc
-const EXTRA_BYTES_DESCRIPTOR_SIZE = 192; // bytes per extra-bytes descriptor (ASPRS spec)
 // R's NA_integer_ sentinel: 32-bit signed minimum, written by lidR for unclassified treeID
 const R_NA_INTEGER = -2147483648;
 
@@ -97,12 +93,37 @@ function formatTreeIdForLasFile(treeID, padWidth = MAX_TREE_ID_PAD_WIDTH) {
 }
 
 
-async function fetchLasBuffer(treeID) {
+async function loadLazData(treeID) {
   const treeIDForFile = formatTreeIdForLasFile(treeID);
-  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
-  const response = await fetch(url);
-  if (response.ok) return response.arrayBuffer();
-  throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
+  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.laz`;
+  const data = await load(url, LASLoader, { las: { fp64: true } });
+
+  const posArr      = data.attributes.POSITION.value;      // Float64Array: [x0,y0,z0, x1,y1,z1, …]
+  const treeIDArr   = data.attributes.treeID?.value ?? null;   // Int32Array or null
+  const intensityArr = data.attributes.intensity?.value ?? null; // Uint16Array or null
+
+  const numPoints = posArr.length / 3;
+  const pts = new Array(numPoints);
+  let zMin = Infinity, zMax = -Infinity;
+
+  for (let i = 0; i < numPoints; i++) {
+    const x = posArr[i * 3];
+    const y = posArr[i * 3 + 1];
+    const z = posArr[i * 3 + 2];
+    if (z < zMin) zMin = z;
+    if (z > zMax) zMax = z;
+
+    let tid = null;
+    if (treeIDArr !== null) {
+      const raw = treeIDArr[i];
+      tid = (raw === R_NA_INTEGER) ? null : raw;
+    }
+
+    const intensity = intensityArr !== null ? intensityArr[i] : 0;
+    pts[i] = { position: [x, y, z], z, treeID: tid, intensity };
+  }
+
+  return { pts, zMin, zMax };
 }
 
 // ── Dan's Lost Trail KML loader ───────────────────────────────
@@ -622,118 +643,12 @@ function initDeckGL() {
   });
 }
 
-// ── Native binary LAS parser (no CDN / no WASM required) ─────
-// Supports LAS 1.0–1.4; reads X/Y/Z, intensity (uint16 at byte 12 of every
-// point record), and the per-point treeID extra byte attribute written by
-// lidR's segment_trees().
-// Header field offsets follow the ASPRS LAS 1.4-R15 specification.
-function parseLAS(buffer) {
-  const dv = new DataView(buffer);
-
-  // Validate "LASF" file signature (offsets 0–3)
-  const sig = String.fromCharCode(
-    dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)
-  );
-  if (sig !== "LASF") throw new Error("Not a valid LAS file (bad signature)");
-
-  const headerSize     = dv.getUint16(94,  true);  // offset 94:  header size (bytes)
-  const vMinor         = dv.getUint8(25);           // offset 25:  version minor
-  const numVLRs        = dv.getUint32(100, true);   // offset 100: number of VLRs
-  const pointFormat    = dv.getUint8(104) & 0x3F;   // offset 104: point data format (mask compression bit)
-  const offsetToPoints = dv.getUint32(96,  true);   // offset 96:  offset to point data
-  const pointRecLen    = dv.getUint16(105, true);   // offset 105: point data record length
-  // offset 107: legacy 32-bit point count (always valid for LAS ≤ 1.3; may be 0 for LAS 1.4)
-  let numPoints = dv.getUint32(107, true);
-
-  // LAS 1.4 stores the authoritative 64-bit count at offset 247
-  if (vMinor >= 4 && numPoints === 0) {
-    numPoints = Number(dv.getBigUint64(247, true));
-  }
-
-  // Scale factors and offsets for coordinate de-quantisation (offsets 131–178)
-  const xScale = dv.getFloat64(131, true);  // offset 131: X scale factor
-  const yScale = dv.getFloat64(139, true);  // offset 139: Y scale factor
-  const zScale = dv.getFloat64(147, true);  // offset 147: Z scale factor
-  const xOff   = dv.getFloat64(155, true);  // offset 155: X offset
-  const yOff   = dv.getFloat64(163, true);  // offset 163: Y offset
-  const zOff   = dv.getFloat64(171, true);  // offset 171: Z offset
-
-  // ── Parse VLRs to locate the treeID extra bytes attribute ────
-  // lidR stores treeID as an int32 Extra Bytes record (LASF_Spec / record ID 4).
-  // Each extra bytes descriptor is 192 bytes; the name field starts at byte 4.
-  const stdPointSize = POINT_FORMAT_SIZE[pointFormat] ?? POINT_FORMAT_SIZE[0];
-  let treeIDOffset = -1;  // byte offset of treeID within a full point record (-1 = not found)
-
-  let vlrPos = headerSize;
-  for (let v = 0; v < numVLRs && vlrPos + VLR_HEADER_SIZE <= offsetToPoints; v++) {
-    let userID = "";
-    for (let c = 0; c < 16; c++) {
-      const ch = dv.getUint8(vlrPos + 2 + c);
-      if (ch === 0) break;
-      userID += String.fromCharCode(ch);
-    }
-    const recordID  = dv.getUint16(vlrPos + 18, true);
-    const recordLen = dv.getUint16(vlrPos + 20, true);
-
-    if (userID === "LASF_Spec" && recordID === 4) {
-      let extraByteOffset = 0;  // running byte offset within the extra bytes section
-      for (let d = 0; d + EXTRA_BYTES_DESCRIPTOR_SIZE <= recordLen; d += EXTRA_BYTES_DESCRIPTOR_SIZE) {
-        const descBase = vlrPos + VLR_HEADER_SIZE + d;
-        const dataType = dv.getUint8(descBase + 2);
-        let name = "";
-        for (let c = 0; c < 32; c++) {
-          const ch = dv.getUint8(descBase + 4 + c);
-          if (ch === 0) break;
-          name += String.fromCharCode(ch);
-        }
-        if (name === "treeID") {
-          treeIDOffset = stdPointSize + extraByteOffset;
-          break;
-        }
-        extraByteOffset += EXTRA_BYTE_SIZES[dataType] ?? 0;
-      }
-    }
-    vlrPos += VLR_HEADER_SIZE + recordLen;
-  }
-
-  // ── Read points ───────────────────────────────────────────────
-  const pts = new Array(numPoints);
-  let zMin = Infinity, zMax = -Infinity;
-
-  for (let i = 0; i < numPoints; i++) {
-    const base = offsetToPoints + i * pointRecLen;
-    // X, Y, Z are always the first three int32 fields in every LAS point format.
-    // XY are geographic (local projected CRS metres); Z is elevation in metres.
-    // No exaggeration is applied here — coordinates are used at their true scale.
-    const x = dv.getInt32(base,     true) * xScale + xOff;
-    const y = dv.getInt32(base + 4, true) * yScale + yOff;
-    const z = dv.getInt32(base + 8, true) * zScale + zOff;
-    if (z < zMin) zMin = z;
-    if (z > zMax) zMax = z;
-
-    // Intensity: uint16 at byte 12 in every LAS point format (0–65535).
-    const intensity = dv.getUint16(base + 12, true);
-
-    // Read treeID if the extra bytes descriptor was found.
-    // lidR writes treeID as int32; NA_integer_ (-2147483648) means unclassified.
-    let treeID = null;
-    if (treeIDOffset >= 0) {
-      const raw = dv.getInt32(base + treeIDOffset, true);
-      treeID = (raw === R_NA_INTEGER) ? null : raw;
-    }
-
-    pts[i] = { position: [x, y, z], z, treeID, intensity };
-  }
-
-  return { pts, zMin, zMax };
-}
-
 // Generation counter — increments on each show3D call so that a stale async
 // load (from a previous tree selection) doesn't overwrite a newer one.
 let show3DGeneration = 0;
 
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable).
-// The per-tree LAS file already includes all points within WEB_POINT_CLOUD_BUFFER_M
+// The per-tree LAZ file already includes all points within WEB_POINT_CLOUD_BUFFER_M
 // of the treetop. Points whose treeID extra byte matches the selected tree are
 // coloured viridis by elevation; all other points are rendered grey.
 async function show3D(selectedTreeID) {
@@ -758,22 +673,21 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const [buffer, trailCoords] = await Promise.all([
-      fetchLasBuffer(props.treeID),
+    const [{ pts: rawPts, zMin, zMax }, trailCoords] = await Promise.all([
+      loadLazData(props.treeID),
       loadDanTrail(),
     ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
-    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
     const n = rawPts.length;
 
     // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
     // XY: geographic 1:1 scale via the affine transform below.
     // Z:  elevation in metres, used as-is so distances are not distorted.
     //
-    // treeID in crowns.geojson matches the clipped LAS filename and tree segment ID.
+    // treeID in crowns.geojson matches the clipped LAZ filename and tree segment ID.
     const lasTreeID = Number(selectedTreeID);
     let hasTreeIDData = false;
     let hasSelectedTreeID = false;
@@ -889,14 +803,14 @@ async function show3D(selectedTreeID) {
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
     if (selectedTreeSegmentNotFoundInLas) {
-      setStatus(`⚠ Tree ${props.treeID} segment ID not found in LAS; showing full buffered cloud (${n.toLocaleString()} points).`);
+      setStatus(`⚠ Tree ${props.treeID} segment ID not found in point cloud; showing full buffered cloud (${n.toLocaleString()} points).`);
     } else {
       setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
     }
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
-    console.error("LAS load error:", err);
+    console.error("LAZ load error:", err);
     setStatus(`⚠ Point cloud unavailable for tree ${props.treeID}`);
   }
 }

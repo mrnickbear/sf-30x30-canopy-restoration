@@ -1,13 +1,12 @@
 # 04_pointcloud_web_prep.R
-# Step 4: Export per-tree web-ready LAS files for tall trees.
+# Step 4: Export per-tree web-ready LAZ files for tall trees.
 #
 # Reads the normalized + segmented LAS from OUTPUT_LAS_PATH and the Phase 3
 # crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
 # per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
 # points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
-# WEB_POINT_CLOUD_DIR as an individual uncompressed .las file (no WASM/CDN
-# decompressor required in the browser). Note: uncompressed LAS files are
-# larger than LAZ; typical per-tree exports for this dataset are < 5 MB.
+# WEB_POINT_CLOUD_DIR as an individual compressed .laz file. The browser loads
+# these files using @loaders.gl/las which supports both LAS and LAZ natively.
 
 source("config.R")
 
@@ -78,10 +77,10 @@ if (nrow(clip_windows) == 0) {
 }
 
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
-existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.las"))
+existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.laz"))
 if (length(existing_outputs) > 0) {
   message("Removing ", length(existing_outputs),
-          " existing LAS file(s) from: ", WEB_POINT_CLOUD_DIR)
+          " existing LAZ file(s) from: ", WEB_POINT_CLOUD_DIR)
   file.remove(existing_outputs)
 }
 
@@ -95,7 +94,7 @@ for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d.laz"), tree_id)
   )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
@@ -131,7 +130,7 @@ writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
 message("Wrote crown_las_map.json to: ", map_path)
 
 message(
-  "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
+  "Web point cloud prep complete. Wrote ", written, " LAZ file(s) to: ",
   WEB_POINT_CLOUD_DIR
 )
 
