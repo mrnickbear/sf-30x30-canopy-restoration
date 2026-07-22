@@ -55,6 +55,26 @@ function rgbCss(rgb, alpha = 1) {
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 
+// ── Categorical segment colour palette ───────────────────────
+// Used to colour background (non-target) trees by their LAS treeID.
+const SEGMENT_PALETTE = [
+  [228,  26,  28],  // red
+  [ 55, 126, 184],  // blue
+  [ 77, 175,  74],  // green
+  [152,  78, 163],  // purple
+  [255, 127,   0],  // orange
+  [  0, 190, 190],  // teal
+  [190,   0, 190],  // magenta
+  [190, 190,   0],  // olive
+  [166,  86,  40],  // brown
+  [247, 129, 191],  // pink
+];
+
+function segmentColor(treeID, alpha = 200) {
+  const rgb = SEGMENT_PALETTE[Math.abs(treeID) % SEGMENT_PALETTE.length];
+  return [rgb[0], rgb[1], rgb[2], alpha];
+}
+
 // ── 3D-viewable helpers ───────────────────────────────────────
 function is3DViewable(ztop) {
   return typeof ztop === "number" && ztop >= WEB_POINT_CLOUD_MIN_HEIGHT_M;
@@ -130,14 +150,18 @@ async function loadPlyData(url) {
   }
 
   const stride = props.reduce((s, p) => s + p.size, 0);
-  const findOffset = (name) => {
+  const findOffset = (name, required = true) => {
     const idx = props.findIndex(p => p.name === name);
-    if (idx < 0) throw new Error(`PLY: vertex property "${name}" not found`);
+    if (idx < 0) {
+      if (required) throw new Error(`PLY: vertex property "${name}" not found`);
+      return null;
+    }
     return props.slice(0, idx).reduce((s, p) => s + p.size, 0);
   };
-  const xOff = findOffset("x");
-  const yOff = findOffset("y");
-  const zOff = findOffset("z");
+  const xOff      = findOffset("x");
+  const yOff      = findOffset("y");
+  const zOff      = findOffset("z");
+  const treeIDOff = findOffset("treeID", false);  // optional — present in bg files
 
   const view   = new DataView(buffer, headerEnd);
   const pts    = new Array(numPoints);
@@ -150,9 +174,8 @@ async function loadPlyData(url) {
     const z = view.getFloat32(base + zOff, true);
     if (z < zMin) zMin = z;
     if (z > zMax) zMax = z;
-    // PLY files from vcgPlyWrite carry only x, y, z (float32); treeID and
-    // intensity are absent, so per-tree segment highlighting is disabled.
-    pts[i] = { position: [x, y, z], z, treeID: null, intensity: 0 };
+    const treeID = treeIDOff !== null ? view.getInt32(base + treeIDOff, true) : null;
+    pts[i] = { position: [x, y, z], z, treeID };
   }
 
   return { pts, zMin, zMax };
@@ -747,18 +770,20 @@ async function show3D(selectedTreeID) {
       updateTriggers: { getColor: [zMin, zRange] },
     });
 
-    // Background layer: grey context points (rendered below target)
+    // Background layer: context points coloured by segment ID for review
     let bgLayer = null;
     if (bgResult && bgResult.pts.length > 0) {
       const bgPts = bgResult.pts.map(p => {
         const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-        return { position: [lon, lat, p.position[2]] };
+        return { position: [lon, lat, p.position[2]], treeID: p.treeID };
       });
       bgLayer = new deck.PointCloudLayer({
         id:          "point-cloud-background",
         data:        bgPts,
         getPosition: d => d.position,
-        getColor:    [150, 150, 150, 140],
+        getColor:    d => d.treeID !== null
+          ? segmentColor(d.treeID)
+          : [150, 150, 150, 140],
         pointSize:   2,
       });
     }

@@ -5,9 +5,10 @@
 # crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
 # per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M.  For each tree, two PLY
 # files are written to WEB_POINT_CLOUD_DIR:
-#   tree_XXXX_target.ply     – points belonging to the target tree (treeID match)
-#   tree_XXXX_background.ply – all other points within the buffer
-# The browser renders the target viridis-by-elevation and the background grey.
+#   tree_XXXX_target.ply  – points belonging to the target tree (viridis by elevation)
+#   bg_tree_XXXX.ply      – all other buffer points, with a treeID property per point
+# The browser renders the target viridis-by-elevation and the background
+# colour-coded by segment ID for segmentation review.
 
 source("config.R")
 
@@ -15,7 +16,41 @@ library(lidR)
 library(sf)
 library(jsonlite)
 # library(data.table) #fwrite
-library(Rvcg) #ply write
+library(Rvcg) #ply write (target only)
+
+# Write a binary little-endian PLY with float x/y/z + int treeID per vertex.
+# This preserves segment labels for per-tree colouring in the browser.
+write_ply_with_treeid <- function(xyz, treeids, path) {
+  n <- nrow(xyz)
+  header <- paste0(
+    "ply\n",
+    "format binary_little_endian 1.0\n",
+    "element vertex ", n, "\n",
+    "property float x\n",
+    "property float y\n",
+    "property float z\n",
+    "property int treeID\n",
+    "end_header\n"
+  )
+  # Build interleaved binary buffer: 16 bytes per vertex
+  # (x, y, z as float32; treeID as int32), all little-endian.
+  x_bytes  <- writeBin(as.single(xyz[, 1]),     raw(), size = 4, endian = "little")
+  y_bytes  <- writeBin(as.single(xyz[, 2]),     raw(), size = 4, endian = "little")
+  z_bytes  <- writeBin(as.single(xyz[, 3]),     raw(), size = 4, endian = "little")
+  id_bytes <- writeBin(as.integer(treeids), raw(), size = 4, endian = "little")
+  # Reshape each to 4 × n and rbind → 16 × n; c() iterates column-major so
+  # each column (= one vertex) is written as [x0..x3 y0..y3 z0..z3 id0..id3].
+  body <- c(rbind(
+    matrix(x_bytes,  nrow = 4),
+    matrix(y_bytes,  nrow = 4),
+    matrix(z_bytes,  nrow = 4),
+    matrix(id_bytes, nrow = 4)
+  ))
+  con <- file(path, "wb")
+  writeBin(charToRaw(header), con)
+  writeBin(body, con)
+  close(con)
+}
 
 
 
@@ -127,9 +162,13 @@ for (i in seq_len(nrow(clip_windows))) {
   vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
   message("Wrote ", target_path)
 
-  bg_data <- as.matrix(clipped_las@data[treeID != tree_id, .(X, Y, Z)])
-  if (nrow(bg_data) > 0) {
-    vcgPlyWrite(bg_data, bg_path)
+  bg_subset <- clipped_las@data[treeID != tree_id, .(X, Y, Z, treeID)]
+  if (nrow(bg_subset) > 0) {
+    write_ply_with_treeid(
+      as.matrix(bg_subset[, .(X, Y, Z)]),
+      bg_subset$treeID,
+      bg_path
+    )
     message("Wrote ", bg_path)
   }
 
