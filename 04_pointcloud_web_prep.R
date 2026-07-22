@@ -34,10 +34,12 @@ write_ply_with_treeid <- function(xyz, treeids, path) {
   )
   # Build interleaved binary buffer: 16 bytes per vertex
   # (x, y, z as float32; treeID as int32), all little-endian.
-  # c() strips dim/name attributes so writeBin receives plain atomic vectors.
-  x_bytes  <- writeBin(as.single(c(xyz[, 1])),  raw(), size = 4, endian = "little")
-  y_bytes  <- writeBin(as.single(c(xyz[, 2])),  raw(), size = 4, endian = "little")
-  z_bytes  <- writeBin(as.single(c(xyz[, 3])),  raw(), size = 4, endian = "little")
+  # as.double() + size=4 writes IEEE 754 single-precision; as.single() attaches
+  # a class attribute that makes is.vector() return FALSE, causing writeBin to
+  # error with "can only write vector objects".
+  x_bytes  <- writeBin(as.double(c(xyz[, 1])),  raw(), size = 4, endian = "little")
+  y_bytes  <- writeBin(as.double(c(xyz[, 2])),  raw(), size = 4, endian = "little")
+  z_bytes  <- writeBin(as.double(c(xyz[, 3])),  raw(), size = 4, endian = "little")
   id_bytes <- writeBin(as.integer(c(treeids)),   raw(), size = 4, endian = "little")
   # Reshape each to 4 × n and rbind → 16 × n; c() iterates column-major so
   # each column (= one vertex) is written as [x0..x3 y0..y3 z0..z3 id0..id3].
