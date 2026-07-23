@@ -108,6 +108,9 @@ for (i in seq_len(nrow(clip_windows))) {
   # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
   # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
   # highlight the correct segment.
+  # Always record the crown treeID in the map so app.js knows a LAS file exists;
+  # use NULL when no segment treeID mapping is available.
+  las_tid <- NULL
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
@@ -115,9 +118,10 @@ for (i in seq_len(nrow(clip_windows))) {
     dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
     nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
-      crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
+      las_tid <- as.integer(nearest_tid)
     }
   }
+  crown_las_map[[as.character(tree_id)]] <- las_tid
 
   writeLAS(clipped_las, output_path, index = FALSE)
   written <- written + 1L

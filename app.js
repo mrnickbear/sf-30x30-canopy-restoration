@@ -12,8 +12,6 @@ const DAN_LOST_TRAIL_KML   = "data/vector/dan-s-lost-trail.kml";
 const DEFAULT_CENTER  = [37.75011333486208, -122.45934823666263];
 const DEFAULT_ZOOM    = 18;
 
-// 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
-const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const TREE_ID_PAD_WIDTH_PATH       = "data/web_point_clouds/tree_id_pad_width.txt";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
@@ -68,8 +66,14 @@ function rgbCss(rgb, alpha = 1) {
 }
 
 // ── 3D-viewable helpers ───────────────────────────────────────
-function is3DViewable(ztop) {
-  return typeof ztop === "number" && ztop >= WEB_POINT_CLOUD_MIN_HEIGHT_M;
+// Set of crown treeIDs (as strings) that have a LAS file; populated from
+// crown_las_map.json at startup.  Badge display uses this instead of the
+// hardcoded height threshold so it always matches the files on disk.
+let viewableCrownIds = null;   // null = not yet loaded; Set once loaded
+
+function is3DViewable(treeID) {
+  if (viewableCrownIds === null) return false;
+  return viewableCrownIds.has(String(treeID));
 }
 
 // Convert local LAS CRS coordinates to [longitude, latitude]
@@ -265,6 +269,20 @@ async function init() {
     heightMax = Math.max(...heights);
   }
 
+  // Load crown_las_map.json to know which trees have point cloud files.
+  // The map is written by 04_pointcloud_web_prep.R; keys are crown treeIDs.
+  // Badge display is based on this set so it always matches generated files.
+  try {
+    const mapRes = await fetch(`${WEB_POINT_CLOUD_DIR}/crown_las_map.json`);
+    if (mapRes.ok) {
+      const lasMap = await mapRes.json();
+      viewableCrownIds = new Set(Object.keys(lasMap).map(String));
+    }
+  } catch (_) {
+    // crown_las_map.json absent or unreadable — no 3D badges shown
+  }
+  if (viewableCrownIds === null) viewableCrownIds = new Set();
+
   const total = geojsonData.features.length;
   document.getElementById("crown-count").textContent =
     `${total.toLocaleString()} trees`;
@@ -286,7 +304,7 @@ let geojsonLayer = null;
 
 function leafletStyle(feature) {
   const rgb = featureColor(feature);
-  const isViewable = is3DViewable(feature.properties?.ZTOP);
+  const isViewable = is3DViewable(feature.properties?.treeID);
   return {
     fillColor:   `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
     fillOpacity: 0.55,
@@ -454,7 +472,7 @@ function renderTable() {
       ? `<span class="snag-badge">${row.snagCls}</span>` : "0";
     const heightFmt = typeof row.ZTOP === "number"
       ? row.ZTOP.toFixed(1) : row.ZTOP;
-    const badge3d = is3DViewable(row.ZTOP)
+    const badge3d = is3DViewable(row.treeID)
       ? ` <button class="badge-3d" data-tree-id="${row.treeID}" aria-label="View tree ${row.treeID} in 3D">3D</button>` : "";
 
     tr.innerHTML =
@@ -467,7 +485,7 @@ function renderTable() {
     tr.addEventListener("click", () => selectTree(row.treeID, "table"));
 
     // 3D button activates 3D view without re-selecting
-    if (is3DViewable(row.ZTOP)) {
+    if (is3DViewable(row.treeID)) {
       const btn3d = tr.querySelector(".badge-3d");
       if (btn3d) {
         btn3d.addEventListener("click", (e) => {
@@ -744,7 +762,7 @@ async function show3D(selectedTreeID) {
   );
   if (!feature) return;
   const props = feature.properties;
-  if (!is3DViewable(props.ZTOP)) return;
+  if (!is3DViewable(props.treeID)) return;
 
   initDeckGL();
 
