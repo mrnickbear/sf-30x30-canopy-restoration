@@ -22,7 +22,7 @@ if (USE_CUSTOM_CIRCLE) {
           "],  r = ", CIRCLE_RADIUS, " m)")
   center_point <- st_sfc(
     st_point(c(x = CIRCLE_CENTER_X, y = CIRCLE_CENTER_Y)),
-    st_point(c(x = CIRCLE_CENTER_X, y = CIRCLE_CENTER_Y)), #Mclaren Lodge Cypress
+    st_point(c(x = 47610, y = 26380)), #Mclaren Lodge Cypress (CS13 ft) 156202.54, 86547.58
     crs = cs13_m
   )
   aa <- st_buffer(center_point, dist = CIRCLE_RADIUS)
@@ -37,4 +37,7 @@ if (USE_CUSTOM_CIRCLE) {
 # ---- Clip LiDAR to analysis area ----
 message("Clipping LiDAR to analysis area...")
 las <- clip_roi(ctg, aa)
+if (is.list(las)) {
+  las <- do.call(rbind, las)
+}
 message("Done. LAS object has ", nrow(las@data), " points.")

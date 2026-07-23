@@ -44,7 +44,7 @@ if (!nzchar(OUTPUT_LAS_PATH)) {
 
 # FORCE_SEGMENT = FALSE: skip step 2 when OUTPUT_LAS_PATH already exists.
 # FORCE_SEGMENT = TRUE:  always re-run segmentation (overwrites the saved file).
-FORCE_SEGMENT  <- FALSE
+FORCE_SEGMENT  <- TRUE
 
 RUN_LOAD_DATA  <- TRUE
 RUN_SEGMENT    <- FORCE_SEGMENT || !file.exists(OUTPUT_LAS_PATH)
