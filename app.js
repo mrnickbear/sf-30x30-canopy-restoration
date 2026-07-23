@@ -55,23 +55,49 @@ function rgbCss(rgb, alpha = 1) {
   return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
 }
 
-// ── Categorical segment colour palette ───────────────────────
-// Used to colour background (non-target) trees by their LAS treeID.
-const SEGMENT_PALETTE = [
-  [228,  26,  28],  // red
-  [ 55, 126, 184],  // blue
-  [ 77, 175,  74],  // green
-  [152,  78, 163],  // purple
-  [255, 127,   0],  // orange
-  [  0, 190, 190],  // teal
-  [190,   0, 190],  // magenta
-  [190, 190,   0],  // olive
-  [166,  86,  40],  // brown
-  [247, 129, 191],  // pink
+
+
+// A muted, desaturated 12-color palette tailored to sit on top of Viridis
+// (Lowered chroma/saturation to keep the main subject prominent)
+const MUTED_SEGMENT_PALETTE = [
+  [180, 160, 150], // Warm taupe
+  [145, 165, 175], // Slate blue-grey
+  [165, 180, 160], // Soft sage
+  [200, 175, 160], // Muted sandstone
+  [160, 155, 180], // Soft lavender-grey
+  [190, 180, 150], // Muted olive gold
+  [140, 170, 165], // Soft eucalyptus
+  [185, 155, 165], // Dusty rose
+  [150, 160, 150], // Neutral moss
+  [175, 170, 185], // Cool dusk
+  [195, 165, 145], // Muted terracotta
+  [155, 175, 185]  // Slate ice
 ];
 
+/**
+ * Returns RGBA color for segmented tree IDs.
+ * @param {number} treeID - Individual tree identifier.
+ * @param {number} [alpha=110] - Default lowered alpha (~43%) for subtle transparency over Viridis.
+ * @param {number} [desaturation=0.4] - Blends RGB toward neutral grey to fade brightness.
+ */
+ 
+ /*
+function segmentColor(treeID, alpha = 110, desaturation = 0.4) {
+  // Safe array lookup for negative or non-integer IDs
+  const index = Math.abs(Math.floor(treeID)) % MUTED_SEGMENT_PALETTE.length;
+  const baseRgb = MUTED_SEGMENT_PALETTE[index];
+
+  // Optional on-the-fly fading toward neutral grey (128, 128, 128) for extra contrast
+  const r = Math.round(baseRgb[0] * (1 - desaturation) + 128 * desaturation);
+  const g = Math.round(baseRgb[1] * (1 - desaturation) + 128 * desaturation);
+  const b = Math.round(baseRgb[2] * (1 - desaturation) + 128 * desaturation);
+
+  return [r, g, b, alpha];
+}
+*/
+
 function segmentColor(treeID, alpha = 200) {
-  const rgb = SEGMENT_PALETTE[Math.abs(treeID) % SEGMENT_PALETTE.length];
+  const rgb = MUTED_SEGMENT_PALETTE[Math.abs(treeID) % MUTED_SEGMENT_PALETTE.length];
   return [rgb[0], rgb[1], rgb[2], alpha];
 }
 
