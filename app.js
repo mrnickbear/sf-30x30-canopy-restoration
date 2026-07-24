@@ -12,22 +12,18 @@ const DAN_LOST_TRAIL_KML   = "data/vector/dan-s-lost-trail.kml";
 const DEFAULT_CENTER  = [37.75011333486208, -122.45934823666263];
 const DEFAULT_ZOOM    = 18;
 
-// 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
-const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const TREE_ID_PAD_WIDTH_PATH       = "data/web_point_clouds/tree_id_pad_width.txt";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 //let lasTreeIdPadWidth              = 1;
 
-// LAS parsing constants
-// Standard point record size (bytes) indexed by point data format 0–10 (ASPRS LAS 1.4 spec)
-const POINT_FORMAT_SIZE = [20, 28, 26, 34, 57, 63, 30, 36, 38, 59, 67];
-// Extra bytes data_type → byte width (types 1–10; type 0 is undocumented/variable)
-const EXTRA_BYTE_SIZES         = [0, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8];
-const VLR_HEADER_SIZE          = 54;   // bytes: 2 reserved + 16 userID + 2 recordID + 2 recLen + 32 desc
-const EXTRA_BYTES_DESCRIPTOR_SIZE = 192; // bytes per extra-bytes descriptor (ASPRS spec)
-// R's NA_integer_ sentinel: 32-bit signed minimum, written by lidR for unclassified treeID
-const R_NA_INTEGER = -2147483648;
+// PLY type name → byte width (ASPRS-style aliases also accepted)
+const PLY_TYPE_SIZE = {
+  char: 1, uchar: 1, short: 2, ushort: 2, int: 4, uint: 4,
+  float: 4, double: 8,
+  int8: 1, uint8: 1, int16: 2, uint16: 2, int32: 4, uint32: 4,
+  float32: 4, float64: 8,
+};
 
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
@@ -68,8 +64,14 @@ function rgbCss(rgb, alpha = 1) {
 }
 
 // ── 3D-viewable helpers ───────────────────────────────────────
-function is3DViewable(ztop) {
-  return typeof ztop === "number" && ztop >= WEB_POINT_CLOUD_MIN_HEIGHT_M;
+// Set of crown treeIDs (as strings) that have a PLY file; populated from
+// crown_las_map.json at startup.  Badge display uses this instead of the
+// hardcoded height threshold so it always matches the files on disk.
+let viewableCrownIds = null;   // null = not yet loaded; Set once loaded
+
+function is3DViewable(treeID) {
+  if (viewableCrownIds === null) return false;
+  return viewableCrownIds.has(String(treeID));
 }
 
 // Convert local LAS CRS coordinates to [longitude, latitude]
@@ -97,9 +99,9 @@ function formatTreeIdForLasFile(treeID, padWidth = MAX_TREE_ID_PAD_WIDTH) {
 }
 
 
-async function fetchLasBuffer(treeID) {
+async function fetchPlyBuffer(treeID, suffix = "") {
   const treeIDForFile = formatTreeIdForLasFile(treeID);
-  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}.las`;
+  const url = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}${suffix}.ply`;
   const response = await fetch(url);
   if (response.ok) return response.arrayBuffer();
   throw new Error(`Failed to load point cloud for tree ${treeID}. ${url} -> HTTP ${response.status} - ${response.statusText}`);
@@ -265,6 +267,20 @@ async function init() {
     heightMax = Math.max(...heights);
   }
 
+  // Load crown_las_map.json to know which trees have point cloud files.
+  // The map is written by 04_pointcloud_web_prep.R; keys are crown treeIDs.
+  // Badge display is based on this set so it always matches generated files.
+  try {
+    const mapRes = await fetch(`${WEB_POINT_CLOUD_DIR}/crown_las_map.json`);
+    if (mapRes.ok) {
+      const lasMap = await mapRes.json();
+      viewableCrownIds = new Set(Object.keys(lasMap).map(String));
+    }
+  } catch (_) {
+    // crown_las_map.json absent or unreadable — no 3D badges shown
+  }
+  if (viewableCrownIds === null) viewableCrownIds = new Set();
+
   const total = geojsonData.features.length;
   document.getElementById("crown-count").textContent =
     `${total.toLocaleString()} trees`;
@@ -286,7 +302,7 @@ let geojsonLayer = null;
 
 function leafletStyle(feature) {
   const rgb = featureColor(feature);
-  const isViewable = is3DViewable(feature.properties?.ZTOP);
+  const isViewable = is3DViewable(feature.properties?.treeID);
   return {
     fillColor:   `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`,
     fillOpacity: 0.55,
@@ -454,7 +470,7 @@ function renderTable() {
       ? `<span class="snag-badge">${row.snagCls}</span>` : "0";
     const heightFmt = typeof row.ZTOP === "number"
       ? row.ZTOP.toFixed(1) : row.ZTOP;
-    const badge3d = is3DViewable(row.ZTOP)
+    const badge3d = is3DViewable(row.treeID)
       ? ` <button class="badge-3d" data-tree-id="${row.treeID}" aria-label="View tree ${row.treeID} in 3D">3D</button>` : "";
 
     tr.innerHTML =
@@ -467,7 +483,7 @@ function renderTable() {
     tr.addEventListener("click", () => selectTree(row.treeID, "table"));
 
     // 3D button activates 3D view without re-selecting
-    if (is3DViewable(row.ZTOP)) {
+    if (is3DViewable(row.treeID)) {
       const btn3d = tr.querySelector(".badge-3d");
       if (btn3d) {
         btn3d.addEventListener("click", (e) => {
@@ -622,107 +638,72 @@ function initDeckGL() {
   });
 }
 
-// ── Native binary LAS parser (no CDN / no WASM required) ─────
-// Supports LAS 1.0–1.4; reads X/Y/Z, intensity (uint16 at byte 12 of every
-// point record), and the per-point treeID extra byte attribute written by
-// lidR's segment_trees().
-// Header field offsets follow the ASPRS LAS 1.4-R15 specification.
-function parseLAS(buffer) {
-  const dv = new DataView(buffer);
+// ── Native binary PLY parser (no CDN / no WASM required) ──────
+// Supports binary_little_endian and binary_big_endian PLY 1.0.
+// Reads all vertex properties declared in the header; extracts x/y/z
+// (float32) and intensity (uint16) used by the point cloud renderer.
+function parsePLY(buffer) {
+  const bytes = new Uint8Array(buffer);
 
-  // Validate "LASF" file signature (offsets 0–3)
-  const sig = String.fromCharCode(
-    dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)
-  );
-  if (sig !== "LASF") throw new Error("Not a valid LAS file (bad signature)");
+  // Locate end of ASCII header (terminated by "end_header\n")
+  const END_HEADER = "end_header\n";
+  let dataStart = -1;
+  outer: for (let i = 0; i < bytes.length - END_HEADER.length; i++) {
+    for (let j = 0; j < END_HEADER.length; j++) {
+      if (bytes[i + j] !== END_HEADER.charCodeAt(j)) continue outer;
+    }
+    dataStart = i + END_HEADER.length;
+    break;
+  }
+  if (dataStart < 0) throw new Error("Not a valid PLY file (no end_header)");
 
-  const headerSize     = dv.getUint16(94,  true);  // offset 94:  header size (bytes)
-  const vMinor         = dv.getUint8(25);           // offset 25:  version minor
-  const numVLRs        = dv.getUint32(100, true);   // offset 100: number of VLRs
-  const pointFormat    = dv.getUint8(104) & 0x3F;   // offset 104: point data format (mask compression bit)
-  const offsetToPoints = dv.getUint32(96,  true);   // offset 96:  offset to point data
-  const pointRecLen    = dv.getUint16(105, true);   // offset 105: point data record length
-  // offset 107: legacy 32-bit point count (always valid for LAS ≤ 1.3; may be 0 for LAS 1.4)
-  let numPoints = dv.getUint32(107, true);
+  // Parse ASCII header
+  const headerText = new TextDecoder().decode(bytes.slice(0, dataStart));
+  const lines = headerText.split("\n");
 
-  // LAS 1.4 stores the authoritative 64-bit count at offset 247
-  if (vMinor >= 4 && numPoints === 0) {
-    numPoints = Number(dv.getBigUint64(247, true));
+  let numVertices  = 0;
+  let littleEndian = true;
+  const properties = [];
+  let inVertex = false;
+
+  for (const line of lines) {
+    const parts = line.trim().split(/\s+/);
+    if (parts[0] === "format") {
+      littleEndian = parts[1] !== "binary_big_endian";
+    } else if (parts[0] === "element") {
+      inVertex = parts[1] === "vertex";
+      if (inVertex) numVertices = parseInt(parts[2], 10);
+    } else if (parts[0] === "property" && parts[1] !== "list" && inVertex) {
+      const type = parts[1];
+      const name = parts[2];
+      properties.push({ name, size: PLY_TYPE_SIZE[type] ?? 4, type });
+    }
   }
 
-  // Scale factors and offsets for coordinate de-quantisation (offsets 131–178)
-  const xScale = dv.getFloat64(131, true);  // offset 131: X scale factor
-  const yScale = dv.getFloat64(139, true);  // offset 139: Y scale factor
-  const zScale = dv.getFloat64(147, true);  // offset 147: Z scale factor
-  const xOff   = dv.getFloat64(155, true);  // offset 155: X offset
-  const yOff   = dv.getFloat64(163, true);  // offset 163: Y offset
-  const zOff   = dv.getFloat64(171, true);  // offset 171: Z offset
-
-  // ── Parse VLRs to locate the treeID extra bytes attribute ────
-  // lidR stores treeID as an int32 Extra Bytes record (LASF_Spec / record ID 4).
-  // Each extra bytes descriptor is 192 bytes; the name field starts at byte 4.
-  const stdPointSize = POINT_FORMAT_SIZE[pointFormat] ?? POINT_FORMAT_SIZE[0];
-  let treeIDOffset = -1;  // byte offset of treeID within a full point record (-1 = not found)
-
-  let vlrPos = headerSize;
-  for (let v = 0; v < numVLRs && vlrPos + VLR_HEADER_SIZE <= offsetToPoints; v++) {
-    let userID = "";
-    for (let c = 0; c < 16; c++) {
-      const ch = dv.getUint8(vlrPos + 2 + c);
-      if (ch === 0) break;
-      userID += String.fromCharCode(ch);
-    }
-    const recordID  = dv.getUint16(vlrPos + 18, true);
-    const recordLen = dv.getUint16(vlrPos + 20, true);
-
-    if (userID === "LASF_Spec" && recordID === 4) {
-      let extraByteOffset = 0;  // running byte offset within the extra bytes section
-      for (let d = 0; d + EXTRA_BYTES_DESCRIPTOR_SIZE <= recordLen; d += EXTRA_BYTES_DESCRIPTOR_SIZE) {
-        const descBase = vlrPos + VLR_HEADER_SIZE + d;
-        const dataType = dv.getUint8(descBase + 2);
-        let name = "";
-        for (let c = 0; c < 32; c++) {
-          const ch = dv.getUint8(descBase + 4 + c);
-          if (ch === 0) break;
-          name += String.fromCharCode(ch);
-        }
-        if (name === "treeID") {
-          treeIDOffset = stdPointSize + extraByteOffset;
-          break;
-        }
-        extraByteOffset += EXTRA_BYTE_SIZES[dataType] ?? 0;
-      }
-    }
-    vlrPos += VLR_HEADER_SIZE + recordLen;
+  // Build per-property byte offsets within a single vertex record
+  let stride = 0;
+  const offsets = {};
+  for (const p of properties) {
+    offsets[p.name] = { offset: stride, type: p.type };
+    stride += p.size;
   }
 
-  // ── Read points ───────────────────────────────────────────────
-  const pts = new Array(numPoints);
-  let zMin = Infinity, zMax = -Infinity;
+  // Read points
+  const dv  = new DataView(buffer, dataStart);
+  const pts = new Array(numVertices);
+  let zMin  = Infinity;
+  let zMax  = -Infinity;
 
-  for (let i = 0; i < numPoints; i++) {
-    const base = offsetToPoints + i * pointRecLen;
-    // X, Y, Z are always the first three int32 fields in every LAS point format.
-    // XY are geographic (local projected CRS metres); Z is elevation in metres.
-    // No exaggeration is applied here — coordinates are used at their true scale.
-    const x = dv.getInt32(base,     true) * xScale + xOff;
-    const y = dv.getInt32(base + 4, true) * yScale + yOff;
-    const z = dv.getInt32(base + 8, true) * zScale + zOff;
+  for (let i = 0; i < numVertices; i++) {
+    const base = i * stride;
+    const x = dv.getFloat32(base + offsets.x.offset, littleEndian);
+    const y = dv.getFloat32(base + offsets.y.offset, littleEndian);
+    const z = dv.getFloat32(base + offsets.z.offset, littleEndian);
+    const intensity = offsets.intensity
+      ? dv.getUint16(base + offsets.intensity.offset, littleEndian) : 0;
     if (z < zMin) zMin = z;
     if (z > zMax) zMax = z;
-
-    // Intensity: uint16 at byte 12 in every LAS point format (0–65535).
-    const intensity = dv.getUint16(base + 12, true);
-
-    // Read treeID if the extra bytes descriptor was found.
-    // lidR writes treeID as int32; NA_integer_ (-2147483648) means unclassified.
-    let treeID = null;
-    if (treeIDOffset >= 0) {
-      const raw = dv.getInt32(base + treeIDOffset, true);
-      treeID = (raw === R_NA_INTEGER) ? null : raw;
-    }
-
-    pts[i] = { position: [x, y, z], z, treeID, intensity };
+    pts[i] = { position: [x, y, z], z, intensity };
   }
 
   return { pts, zMin, zMax };
@@ -733,9 +714,8 @@ function parseLAS(buffer) {
 let show3DGeneration = 0;
 
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable).
-// The per-tree LAS file already includes all points within WEB_POINT_CLOUD_BUFFER_M
-// of the treetop. Points whose treeID extra byte matches the selected tree are
-// coloured viridis by elevation; all other points are rendered grey.
+// Loads a target PLY (selected tree's segment) and optional background PLY
+// (surrounding context). Target is coloured viridis by elevation; bg is grey.
 async function show3D(selectedTreeID) {
   const generation = ++show3DGeneration;
 
@@ -744,7 +724,7 @@ async function show3D(selectedTreeID) {
   );
   if (!feature) return;
   const props = feature.properties;
-  if (!is3DViewable(props.ZTOP)) return;
+  if (!is3DViewable(props.treeID)) return;
 
   initDeckGL();
 
@@ -758,40 +738,31 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const [buffer, trailCoords] = await Promise.all([
-      fetchLasBuffer(props.treeID),
+    // Fetch the target PLY (selected tree's segment only) and the optional
+    // background PLY (surrounding context written by 04_pointcloud_web_prep.R).
+    const [buffer, bgResult, trailCoords] = await Promise.all([
+      fetchPlyBuffer(props.treeID),
+      fetchPlyBuffer(props.treeID, "_bg").catch(() => null),
       loadDanTrail(),
     ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
-    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
-    const n = rawPts.length;
+    const { pts: rawTargetPts, zMin, zMax } = parsePLY(buffer);
+    const n = rawTargetPts.length;
 
     // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
-    // XY: geographic 1:1 scale via the affine transform below.
-    // Z:  elevation in metres, used as-is so distances are not distorted.
-    //
-    // treeID in crowns.geojson matches the clipped LAS filename and tree segment ID.
-    const lasTreeID = Number(selectedTreeID);
-    let hasTreeIDData = false;
-    let hasSelectedTreeID = false;
-    for (const p of rawPts) {
-      if (p.treeID === null) continue;
-      hasTreeIDData = true;
-      if (Number.isFinite(lasTreeID) && p.treeID === lasTreeID) {
-        hasSelectedTreeID = true;
-        break;
-      }
-    }
-    const selectedTreeSegmentNotFoundInLas = hasTreeIDData && Number.isFinite(lasTreeID) && !hasSelectedTreeID;
-    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID) && hasSelectedTreeID;
-
-    const pts = rawPts.map(p => {
+    const targetPts = rawTargetPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID, intensity: p.intensity };
+      return { position: [lon, lat, p.position[2]], z: p.z, intensity: p.intensity };
     });
+
+    // Parse background context points if the bg file was written.
+    const bgPts = bgResult ? parsePLY(bgResult).pts.map(p => {
+      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+      return { position: [lon, lat, p.position[2]], intensity: p.intensity };
+    }) : [];
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
@@ -802,24 +773,15 @@ async function show3D(selectedTreeID) {
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
-    // Single layer: selected tree's points → viridis by elevation, intensity-
-    // modulated brightness; all other tree IDs in the buffer → dim grey context.
+    // Target tree layer: viridis colour by elevation with intensity-modulated brightness.
     const pointCloudLayer = new deck.PointCloudLayer({
-      id:          "point-cloud",
-      data:        pts,
+      id:          "point-cloud-target",
+      data:        targetPts,
       getPosition: d => d.position,
       getColor:    d => {
         // Normalise intensity (0–65535; 65535 = max uint16) to a brightness
         // factor 0.5–1.0. Falls back to 1.0 when intensity is absent / zero.
         const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
-
-        if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
-          // Surrounding context: intensity-dimmed grey, semi-transparent.
-          // 150 is chosen as a mid-grey base that remains legible over dark basemaps.
-          const v = Math.round(150 * bright);
-          return [v, v, v, 140];
-        }
-        // Selected tree: viridis by elevation with intensity-based brightness.
         const t = (d.z - zMin) / zRange;
         const rgb = viridisColor(t);
         return [
@@ -830,8 +792,21 @@ async function show3D(selectedTreeID) {
         ];
       },
       pointSize: 2,
-      updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
     });
+
+    // Background context layer: dim grey, semi-transparent.
+    // Rendered below the target layer so the selected tree is always visible.
+    const bgLayer = bgPts.length > 0 ? new deck.PointCloudLayer({
+      id:          "point-cloud-bg",
+      data:        bgPts,
+      getPosition: d => d.position,
+      getColor:    d => {
+        const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
+        const v = Math.round(150 * bright);
+        return [v, v, v, 140];
+      },
+      pointSize: 2,
+    }) : null;
 
     // Dan's Lost Trail reference path layer for orientation.
     // Color matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
@@ -868,6 +843,7 @@ async function show3D(selectedTreeID) {
     const layers = [
       ...baseLayers,
       ...(danTrailLayer ? [danTrailLayer] : []),
+      ...(bgLayer ? [bgLayer] : []),
       pointCloudLayer,
     ];
 
@@ -888,15 +864,11 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    if (selectedTreeSegmentNotFoundInLas) {
-      setStatus(`⚠ Tree ${props.treeID} segment ID not found in LAS; showing full buffered cloud (${n.toLocaleString()} points).`);
-    } else {
-      setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
-    }
+    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
-    console.error("LAS load error:", err);
+    console.error("PLY load error:", err);
     setStatus(`⚠ Point cloud unavailable for tree ${props.treeID}`);
   }
 }
