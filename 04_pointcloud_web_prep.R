@@ -1,19 +1,61 @@
 # 04_pointcloud_web_prep.R
-# Step 4: Export per-tree web-ready LAS files for tall trees.
+# Step 4: Export per-tree web-ready PLY files for tall trees.
 #
 # Reads the normalized + segmented LAS from OUTPUT_LAS_PATH and the Phase 3
 # crown polygons from CROWNS_GEOJSON_PATH, then clips one buffered point cloud
-# per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M. Each output contains all
-# points within WEB_POINT_CLOUD_BUFFER_M of the tree top and is written to
-# WEB_POINT_CLOUD_DIR as an individual uncompressed .las file (no WASM/CDN
-# decompressor required in the browser). Note: uncompressed LAS files are
-# larger than LAZ; typical per-tree exports for this dataset are < 5 MB.
+# per tree taller than WEB_POINT_CLOUD_MIN_HEIGHT_M.  For each tree, two PLY
+# files are written to WEB_POINT_CLOUD_DIR:
+#   tree_XXXX_target.ply  – points belonging to the target tree (viridis by elevation)
+#   bg_tree_XXXX.ply      – all other buffer points, with a treeID property per point
+# The browser renders the target viridis-by-elevation and the background
+# colour-coded by segment ID for segmentation review.
 
 source("config.R")
 
 library(lidR)
 library(sf)
 library(jsonlite)
+# library(data.table) #fwrite
+library(Rvcg) #ply write (target only)
+
+# Write a binary little-endian PLY with float x/y/z + int treeID per vertex.
+# This preserves segment labels for per-tree colouring in the browser.
+write_ply_with_treeid <- function(xyz, treeids, path) {
+  n <- nrow(xyz)
+  header <- paste0(
+    "ply\n",
+    "format binary_little_endian 1.0\n",
+    "element vertex ", n, "\n",
+    "property float x\n",
+    "property float y\n",
+    "property float z\n",
+    "property int treeID\n",
+    "end_header\n"
+  )
+  # Build interleaved binary buffer: 16 bytes per vertex
+  # (x, y, z as float32; treeID as int32), all little-endian.
+  # as.double() + size=4 writes IEEE 754 single-precision; as.single() attaches
+  # a class attribute that makes is.vector() return FALSE, causing writeBin to
+  # error with "can only write vector objects".
+  x_bytes  <- writeBin(as.double(c(xyz[, 1])),  raw(), size = 4, endian = "little")
+  y_bytes  <- writeBin(as.double(c(xyz[, 2])),  raw(), size = 4, endian = "little")
+  z_bytes  <- writeBin(as.double(c(xyz[, 3])),  raw(), size = 4, endian = "little")
+  id_bytes <- writeBin(as.integer(c(treeids)),   raw(), size = 4, endian = "little")
+  # Reshape each to 4 × n and rbind → 16 × n; c() iterates column-major so
+  # each column (= one vertex) is written as [x0..x3 y0..y3 z0..z3 id0..id3].
+  body <- c(rbind(
+    matrix(x_bytes,  nrow = 4),
+    matrix(y_bytes,  nrow = 4),
+    matrix(z_bytes,  nrow = 4),
+    matrix(id_bytes, nrow = 4)
+  ))
+  con <- file(path, "wb")
+  writeBin(charToRaw(header), con)
+  writeBin(body, con)
+  close(con)
+}
+
+
 
 if (!file.exists(OUTPUT_LAS_PATH)) {
   stop("Segmented LAS not found at: ", OUTPUT_LAS_PATH,
@@ -78,10 +120,10 @@ if (nrow(clip_windows) == 0) {
 }
 
 dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
-existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.las"))
+existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.ply"))
 if (length(existing_outputs) > 0) {
   message("Removing ", length(existing_outputs),
-          " existing LAS file(s) from: ", WEB_POINT_CLOUD_DIR)
+          " existing PLY file(s) from: ", WEB_POINT_CLOUD_DIR)
   file.remove(existing_outputs)
 }
 
@@ -93,9 +135,13 @@ crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
   tree_id <- clip_windows$treeID[i]
-  output_path <- file.path(
+  target_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_target.ply"), tree_id)
+  )
+  bg_path <- file.path(
+    WEB_POINT_CLOUD_DIR,
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_bg.ply"), tree_id)
   )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
@@ -104,14 +150,10 @@ for (i in seq_len(nrow(clip_windows))) {
     next
   }
 
-  # The treeID attribute in the LAS is assigned by segment_trees() and may not
-  # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
-  # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
-  # highlight the correct segment.
+  # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
-    # Squared distances avoid sqrt; which.min needs only relative ordering.
     dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
     nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
@@ -119,9 +161,21 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
 
-  writeLAS(clipped_las, output_path, index = FALSE)
+  # Save target (points belonging to this tree) and background (all other points).
+  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
+  message("Wrote ", target_path)
+
+  bg_subset <- clipped_las@data[treeID != tree_id, .(X, Y, Z, treeID)]
+  if (nrow(bg_subset) > 0) {
+    write_ply_with_treeid(
+      as.matrix(bg_subset[, .(X, Y, Z)]),
+      bg_subset$treeID,
+      bg_path
+    )
+    message("Wrote ", bg_path)
+  }
+
   written <- written + 1L
-  message("Wrote ", output_path)
 }
 
 # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
@@ -131,14 +185,14 @@ writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
 message("Wrote crown_las_map.json to: ", map_path)
 
 message(
-  "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
+  "Web point cloud prep complete. Wrote ", written, " file(s) to: ",
   WEB_POINT_CLOUD_DIR
 )
 
 # #tests
 # library(mapview)
-# mapview(clip_windows)
-# 
+# mapview(clip_windows) #3D only
+# mapview(crown_outlines)
 # test <- readLAS("data/web_point_clouds/tree_37.las")
 # plot(test)
 

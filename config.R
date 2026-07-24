@@ -32,13 +32,13 @@ USE_CUSTOM_CIRCLE <- TRUE
 AOI_KML_PATH      <- "data/vector/updatedAA.kml"
 
 # DLT_040 test circle parameters (used when USE_CUSTOM_CIRCLE = TRUE)
-CIRCLE_CENTER_X <- 47200
-CIRCLE_CENTER_Y <- 23900
-CIRCLE_RADIUS   <- 40   # meters
+CIRCLE_CENTER_X <- 47220
+CIRCLE_CENTER_Y <- 23920
+CIRCLE_RADIUS   <- 20   # meters
 
 # ---- Processing Parameters ----
 CHM_RES          <- 0.5   # Canopy height model resolution (meters)
-MIN_HEIGHT_M     <- 3     # Drop points below this height after normalization (meters)
+MIN_HEIGHT_M     <- 1     # Drop points below this height after normalization (meters)
 TREE_DETECTION_WS <- 10  # Window size for local maximum filter (lmf)
 
 # Snag classification thresholds (Wing et al. 2015 BBPRthrsh_mat)
@@ -68,6 +68,6 @@ PICTOMETRY_URL <- "https://maps.sfdpw.org/arcgis/rest/services/Pictometry/Pictom
 # Keep these separate even though both currently default to 30 m:
 # MIN_HEIGHT_M filters which trees are exported, BUFFER_M controls clip extent.
 # They may diverge later if shorter trees are exported with the same clip radius.
-WEB_POINT_CLOUD_MIN_HEIGHT_M <- 42.5
+WEB_POINT_CLOUD_MIN_HEIGHT_M <- 24
 WEB_POINT_CLOUD_BUFFER_M <- 30
 WEB_POINT_CLOUD_CRS <- 7131

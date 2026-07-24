@@ -13,6 +13,7 @@
 # Outputs (written to file and returned to the R environment):
 #   seg_snags – LAS with treeID and snagCls attributes
 #               saved to OUTPUT_LAS_PATH
+# plot(las)
 
 source("config.R")
 
@@ -57,7 +58,7 @@ nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
 seg_thinned <- decimate_points(nlas, homogenize(density = 25, res = 1))
 
 # 2. Segment the thinned cloud (Li algorithm will perform beautifully here)
-seg_thinned <- segment_trees(las = seg_thinned, algorithm = li2012(dt1 = 1.2, dt2 = 1.6, R = 4.0))
+seg_thinned <- segment_trees(las = seg_thinned, algorithm = li2012(dt1 = 1.2, dt2 = 1.6, R = 5.0, hmin=MIN_HEIGHT_M)) #R=7.0 with dt2=3 for City Hall London Planes, but 
 
 # --- NEW: MAP BACK TO ORIGINAL HIGH-RES DATA ---
 
@@ -84,7 +85,10 @@ seg <- add_attribute(nlas, matched_tree_ids, "treeID")
 # crown_outlines <- delineate_crowns(seg, attribute = "treeID")
 
 
-x <- plot(seg, color = "treeID")
+# x <- plot(seg, color = "treeID")
+# 
+# las_new <- filter_poi(seg, X > 50000)
+# plot(las_new, color = "treeID")
 
 
 # # ---- Rescale intensity for snag classification ----
@@ -120,103 +124,8 @@ crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
 st_crs(crown_outlines) <- cs13_m
 
 
-crowns_above_threshold <- subset(
-  crown_outlines,
-  ZTOP > WEB_POINT_CLOUD_MIN_HEIGHT_M
-)
-
-if (nrow(crowns_above_threshold) == 0) {
-  stop("No crowns exceed ", WEB_POINT_CLOUD_MIN_HEIGHT_M,
-       " m in ", CROWNS_GEOJSON_PATH)
-}
-
-tree_points <- st_sf(
-  crowns_above_threshold,
-  geometry = st_sfc(
-    Map(
-      function(x, y) st_point(c(x, y)),
-      crowns_above_threshold$XTOP,
-      crowns_above_threshold$YTOP
-    ),
-    crs = st_crs(seg)
-  )
-)
-
-clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
-if (nrow(clip_windows) == 0) {
-  stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
-}
-
-
-dir.create(WEB_POINT_CLOUD_DIR, recursive = TRUE, showWarnings = FALSE)
-existing_outputs <- Sys.glob(file.path(WEB_POINT_CLOUD_DIR, "*.las"))
-if (length(existing_outputs) > 0) {
-  message("Removing ", length(existing_outputs),
-          " existing LAS file(s) from: ", WEB_POINT_CLOUD_DIR)
-  file.remove(existing_outputs)
-}
-
-
-
-# max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
-# tree_id_pad_width_path <- file.path(WEB_POINT_CLOUD_DIR, "tree_id_pad_width.txt")
-# writeLines(as.character(max_tree_id_digits), tree_id_pad_width_path)
-# message("Wrote tree_id_pad_width.txt to: ", tree_id_pad_width_path)
-written <- 0L
-# Maps crown treeID (character) -> LAS segment treeID (integer)
-# Written to crown_las_map.json so app.js can colour the correct tree.
-crown_las_map <- list()
-
-
-for (i in seq_len(nrow(clip_windows))) {
-  tree_id <- clip_windows$treeID[i]
-  output_path <- file.path(
-    WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
-  )
-  
-  clipped_las <- clip_roi(seg, clip_windows[i, ])
-  if (is.null(clipped_las) || nrow(clipped_las@data) == 0) {
-    message("Skipping tree ", tree_id, ": no points found in buffered clip.")
-    next
-  }
-  
-  # The treeID attribute in the LAS is assigned by segment_trees() and may not
-  # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
-  # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
-  # highlight the correct segment.
-  if ("treeID" %in% names(clipped_las@data)) {
-    xtop <- clip_windows$XTOP[i]
-    ytop <- clip_windows$YTOP[i]
-    # Squared distances avoid sqrt; which.min needs only relative ordering.
-    dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
-    nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
-    if (!is.na(nearest_tid)) {
-      crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
-    }
-  }
-  
-  writeLAS(clipped_las, output_path, index = FALSE)
-  written <- written + 1L
-  message("Wrote ", output_path)
-}
-
-# #IS THIS STILL NEEDED?
-# 
-# # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
-# # app.js loads this at startup to resolve which LAS treeID to highlight.
-# map_path <- file.path(WEB_POINT_CLOUD_DIR, "crown_las_map.json")
-# writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
-# message("Wrote crown_las_map.json to: ", map_path)
-
-message(
-  "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
-  WEB_POINT_CLOUD_DIR
-)
-
-
 # Transform sf objects to WGS84 (EPSG:4326) for web mapping
-treetops_web <- st_transform(tree_points %>% st_set_crs(cs13_m), 4326)
+# treetops_web <- st_transform(tree_points %>% st_set_crs(cs13_m), 4326)
 crowns_web <- st_transform(crown_outlines %>% st_set_crs(cs13_m), 4326)
 
 # 2. Export to GeoJSON
@@ -227,7 +136,6 @@ crowns_web <- st_transform(crown_outlines %>% st_set_crs(cs13_m), 4326)
 
 st_write(crowns_web, "data/vector/crowns.geojson", driver = "GeoJSON", delete_dsn = TRUE)
 
-
 # ---- Save results ----
 message("Saving segmented LAS to: ", OUTPUT_LAS_PATH)
 save_ok <- writeLAS(seg, OUTPUT_LAS_PATH, index = FALSE)
@@ -235,25 +143,28 @@ if (save_ok != OUTPUT_LAS_PATH) {
   stop("Failed to write segmented LAS to: ", OUTPUT_LAS_PATH)
 }
 
-# # Verify treeID persisted in the saved LAS for downstream crown_metrics().
-# seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
-# if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
-#   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
-#        OUTPUT_LAS_PATH)
-# }
-# message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
+#library(mapview)
+#mapview(crowns_web)
 
-plot(seg, color = "treeID")
-
-#plot seg with treeID color, but highlight a specific treeID (e.g., 37) in yellow and make all other trees faint gray.
-
-# 1. Define your target tree ID
-target_id <- 37
-
-# 2. Build a color vector directly for every point in the point cloud
-# If treeID matches target_id, make it yellow; otherwise, make it faint gray
-point_colors <- ifelse(seg@data$treeID == target_id, "yellow", rgb(0.5, 0.5, 0.5, 0.1))
-
-# 3. Plot using the 'col' argument instead of 'color' or 'palette'
-# This bypasses lidR's attribute name checks completely
-plot(seg, col = point_colors, main = paste("Highlighting Tree", target_id))
+# # # Verify treeID persisted in the saved LAS for downstream crown_metrics().
+# # seg_check <- readLAS(OUTPUT_LAS_PATH, select = "*")
+# # if (is.null(seg_check) || !"treeID" %in% names(seg_check@data)) {
+# #   stop("Saved LAS is missing 'treeID'. Segmentation was not persisted to: ",
+# #        OUTPUT_LAS_PATH)
+# # }
+# # message("Segmentation complete. Output saved to: ", OUTPUT_LAS_PATH)
+# 
+# plot(seg, color = "treeID")
+# 
+# #plot seg with treeID color, but highlight a specific treeID (e.g., 37) in yellow and make all other trees faint gray.
+# 
+# # 1. Define your target tree ID
+# target_id <- 37
+# 
+# # 2. Build a color vector directly for every point in the point cloud
+# # If treeID matches target_id, make it yellow; otherwise, make it faint gray
+# point_colors <- ifelse(seg@data$treeID == target_id, "yellow", rgb(0.5, 0.5, 0.5, 0.1))
+# 
+# # 3. Plot using the 'col' argument instead of 'color' or 'palette'
+# # This bypasses lidR's attribute name checks completely
+# plot(seg, col = point_colors, main = paste("Highlighting Tree", target_id))
