@@ -23,6 +23,7 @@ if (USE_CUSTOM_CIRCLE) {
   center_point <- st_sfc(
     st_point(c(x = CIRCLE_CENTER_X, y = CIRCLE_CENTER_Y)),
     st_point(c(x = 47610, y = 26380)), #Mclaren Lodge Cypress (CS13 ft) 156202.54, 86547.58
+    st_point(c(x = 50856, y = 27290)), #City Hall
     crs = cs13_m
   )
   aa <- st_buffer(center_point, dist = CIRCLE_RADIUS)

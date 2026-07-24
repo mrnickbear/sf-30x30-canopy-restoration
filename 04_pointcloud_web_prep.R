@@ -141,7 +141,7 @@ for (i in seq_len(nrow(clip_windows))) {
   )
   bg_path <- file.path(
     WEB_POINT_CLOUD_DIR,
-    sprintf(paste0("bg_tree_%0", max_tree_id_digits, "d.ply"), tree_id)
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_bg.ply"), tree_id)
   )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
@@ -191,8 +191,8 @@ message(
 
 # #tests
 # library(mapview)
-# mapview(clip_windows)
-# 
+# mapview(clip_windows) #3D only
+# mapview(crown_outlines)
 # test <- readLAS("data/web_point_clouds/tree_37.las")
 # plot(test)
 
