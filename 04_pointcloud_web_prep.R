@@ -86,9 +86,12 @@ if (length(existing_outputs) > 0) {
 }
 
 # max_tree_id_digits <- max(nchar(as.character(clip_windows$treeID)))
-written <- 0L
-# Maps crown treeID (character) -> LAS segment treeID (integer)
-# Written to crown_las_map.json so app.js can colour the correct tree.
+written    <- 0L
+written_bg <- 0L
+# Maps crown treeID (character) -> LAS segment treeID (integer or NA_integer_)
+# Written to crown_las_map.json so app.js knows which trees have LAS files.
+# Note: use NA_integer_ (not NULL) for missing values — assigning NULL to a named
+# R list element removes that key entirely, which would hide the tree from app.js.
 crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
@@ -96,6 +99,10 @@ for (i in seq_len(nrow(clip_windows))) {
   output_path <- file.path(
     WEB_POINT_CLOUD_DIR,
     sprintf(paste0("tree_%0", max_tree_id_digits, "d.las"), tree_id)
+  )
+  bg_path <- file.path(
+    WEB_POINT_CLOUD_DIR,
+    sprintf(paste0("tree_%0", max_tree_id_digits, "d_bg.las"), tree_id)
   )
 
   clipped_las <- clip_roi(seg, clip_windows[i, ])
@@ -108,8 +115,6 @@ for (i in seq_len(nrow(clip_windows))) {
   # match the crown treeID from crowns.geojson.  Find the LAS treeID of the
   # point nearest to this crown's treetop (XTOP, YTOP) so the browser can
   # highlight the correct segment.
-  # Always record the crown treeID in the map so app.js knows a LAS file exists;
-  # use NULL when no segment treeID mapping is available.
   las_tid <- NULL
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
@@ -121,11 +126,32 @@ for (i in seq_len(nrow(clip_windows))) {
       las_tid <- as.integer(nearest_tid)
     }
   }
-  crown_las_map[[as.character(tree_id)]] <- las_tid
+  # Always record the crown treeID in the map; NA_integer_ (serialised as JSON
+  # null) means no segment treeID mapping is available but the file still exists.
+  crown_las_map[[as.character(tree_id)]] <- if (is.null(las_tid)) NA_integer_ else las_tid
 
-  writeLAS(clipped_las, output_path, index = FALSE)
-  written <- written + 1L
-  message("Wrote ", output_path)
+  # Split the buffered clip into a target file (selected tree's segment only)
+  # and a background file (surrounding context) when the LAS segment treeID is
+  # known.  Both files are loaded by app.js: target is coloured viridis by
+  # elevation; background is rendered as dim grey for spatial context.
+  if (!is.null(las_tid) && "treeID" %in% names(clipped_las@data)) {
+    target_las <- filter_poi(clipped_las, treeID == las_tid)
+    bg_las     <- filter_poi(clipped_las, is.na(treeID) | treeID != las_tid)
+  } else {
+    target_las <- clipped_las
+    bg_las     <- NULL
+  }
+
+  if (!is.null(target_las) && nrow(target_las@data) > 0) {
+    writeLAS(target_las, output_path, index = FALSE)
+    written <- written + 1L
+    message("Wrote ", output_path)
+  }
+  if (!is.null(bg_las) && nrow(bg_las@data) > 0) {
+    writeLAS(bg_las, bg_path, index = FALSE)
+    written_bg <- written_bg + 1L
+    message("Wrote ", bg_path)
+  }
 }
 
 # Write the crown → LAS treeID mapping alongside the per-tree LAS files.
@@ -135,8 +161,8 @@ writeLines(jsonlite::toJSON(crown_las_map, auto_unbox = TRUE), map_path)
 message("Wrote crown_las_map.json to: ", map_path)
 
 message(
-  "Web point cloud prep complete. Wrote ", written, " LAS file(s) to: ",
-  WEB_POINT_CLOUD_DIR
+  "Web point cloud prep complete. Wrote ", written, " target LAS file(s) and ",
+  written_bg, " background LAS file(s) to: ", WEB_POINT_CLOUD_DIR
 )
 
 # #tests

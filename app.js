@@ -776,40 +776,34 @@ async function show3D(selectedTreeID) {
   setStatus(`Loading point cloud for tree ${props.treeID}…`);
 
   try {
-    const [buffer, trailCoords] = await Promise.all([
+    // Fetch the target LAS (selected tree's segment only) and the optional
+    // background LAS (surrounding context written by 04_pointcloud_web_prep.R).
+    const treeIDForFile = formatTreeIdForLasFile(props.treeID);
+    const bgUrl = `${WEB_POINT_CLOUD_DIR}/tree_${treeIDForFile}_bg.las`;
+
+    const [buffer, bgResult, trailCoords] = await Promise.all([
       fetchLasBuffer(props.treeID),
+      fetch(bgUrl).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null),
       loadDanTrail(),
     ]);
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
-    const { pts: rawPts, zMin, zMax } = parseLAS(buffer);
-    const n = rawPts.length;
+    const { pts: rawTargetPts, zMin, zMax } = parseLAS(buffer);
+    const n = rawTargetPts.length;
 
     // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale (no exaggeration).
-    // XY: geographic 1:1 scale via the affine transform below.
-    // Z:  elevation in metres, used as-is so distances are not distorted.
-    //
-    // treeID in crowns.geojson matches the clipped LAS filename and tree segment ID.
-    const lasTreeID = Number(selectedTreeID);
-    let hasTreeIDData = false;
-    let hasSelectedTreeID = false;
-    for (const p of rawPts) {
-      if (p.treeID === null) continue;
-      hasTreeIDData = true;
-      if (Number.isFinite(lasTreeID) && p.treeID === lasTreeID) {
-        hasSelectedTreeID = true;
-        break;
-      }
-    }
-    const selectedTreeSegmentNotFoundInLas = hasTreeIDData && Number.isFinite(lasTreeID) && !hasSelectedTreeID;
-    const shouldFilterByTreeID = hasTreeIDData && Number.isFinite(lasTreeID) && hasSelectedTreeID;
-
-    const pts = rawPts.map(p => {
+    const targetPts = rawTargetPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z, treeID: p.treeID, intensity: p.intensity };
+      return { position: [lon, lat, p.position[2]], z: p.z, intensity: p.intensity };
     });
+
+    // Parse background context points if the bg file was written.
+    const bgPts = bgResult ? parseLAS(bgResult).pts.map(p => {
+      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
+      return { position: [lon, lat, p.position[2]], intensity: p.intensity };
+    }) : [];
 
     const zRange = zMax > zMin ? zMax - zMin : 1;
     const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
@@ -820,24 +814,15 @@ async function show3D(selectedTreeID) {
     if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
     if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
-    // Single layer: selected tree's points → viridis by elevation, intensity-
-    // modulated brightness; all other tree IDs in the buffer → dim grey context.
+    // Target tree layer: viridis colour by elevation with intensity-modulated brightness.
     const pointCloudLayer = new deck.PointCloudLayer({
-      id:          "point-cloud",
-      data:        pts,
+      id:          "point-cloud-target",
+      data:        targetPts,
       getPosition: d => d.position,
       getColor:    d => {
         // Normalise intensity (0–65535; 65535 = max uint16) to a brightness
         // factor 0.5–1.0. Falls back to 1.0 when intensity is absent / zero.
         const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
-
-        if (shouldFilterByTreeID && d.treeID !== null && d.treeID !== lasTreeID) {
-          // Surrounding context: intensity-dimmed grey, semi-transparent.
-          // 150 is chosen as a mid-grey base that remains legible over dark basemaps.
-          const v = Math.round(150 * bright);
-          return [v, v, v, 140];
-        }
-        // Selected tree: viridis by elevation with intensity-based brightness.
         const t = (d.z - zMin) / zRange;
         const rgb = viridisColor(t);
         return [
@@ -848,8 +833,21 @@ async function show3D(selectedTreeID) {
         ];
       },
       pointSize: 2,
-      updateTriggers: { getColor: [lasTreeID, shouldFilterByTreeID] },
     });
+
+    // Background context layer: dim grey, semi-transparent.
+    // Rendered below the target layer so the selected tree is always visible.
+    const bgLayer = bgPts.length > 0 ? new deck.PointCloudLayer({
+      id:          "point-cloud-bg",
+      data:        bgPts,
+      getPosition: d => d.position,
+      getColor:    d => {
+        const bright = d.intensity > 0 ? 0.5 + 0.5 * (d.intensity / 65535) : 1.0;
+        const v = Math.round(150 * bright);
+        return [v, v, v, 140];
+      },
+      pointSize: 2,
+    }) : null;
 
     // Dan's Lost Trail reference path layer for orientation.
     // Color matches the KML lineStyle (#ff14b446 → ABGR → green #46b414).
@@ -886,6 +884,7 @@ async function show3D(selectedTreeID) {
     const layers = [
       ...baseLayers,
       ...(danTrailLayer ? [danTrailLayer] : []),
+      ...(bgLayer ? [bgLayer] : []),
       pointCloudLayer,
     ];
 
@@ -906,11 +905,7 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    if (selectedTreeSegmentNotFoundInLas) {
-      setStatus(`⚠ Tree ${props.treeID} segment ID not found in LAS; showing full buffered cloud (${n.toLocaleString()} points).`);
-    } else {
-      setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
-    }
+    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} points, height ${props.ZTOP} m`);
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
