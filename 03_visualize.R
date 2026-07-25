@@ -40,7 +40,7 @@ if (is.null(seg) || !"treeID" %in% names(seg@data)) {
 # ---- Crown metrics ----
 message("Computing crown metrics...")
 metrics <- crown_metrics(las = seg, func = .stdtreemetrics)
-st_crs(metrics) <- cs13_m
+st_crs(metrics) <- 4326
 
 # ---- Identify snag points ----
 # Snag class codes (Wing 2015):
@@ -54,7 +54,7 @@ st_crs(metrics) <- cs13_m
 # ---- Delineate crown polygons ----
 message("Delineating crown polygons...")
 crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
-st_crs(crown_outlines) <- cs13_m
+st_crs(crown_outlines) <- 4326
 
 # snag_outlines <- st_as_sf(delineate_crowns(snags, attribute = "treeID"))
 # st_crs(snag_outlines) <- cs13_m
@@ -86,9 +86,9 @@ print(tmap_sf_aerial)
 
 
 
-# Transform sf objects to WGS84 (EPSG:4326) for web mapping
-treetops_web <- st_transform(metrics, 4326)
-crowns_web <- st_transform(crown_outlines, 4326)
+# sf objects are already in WGS84 (EPSG:4326); no transform needed.
+treetops_web <- metrics
+crowns_web <- crown_outlines
 
 # 2. Export to GeoJSON
 # delete_dsn = TRUE ensures it overwrites cleanly if you re-run the script

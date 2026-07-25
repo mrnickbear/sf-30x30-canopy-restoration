@@ -37,6 +37,7 @@ if (!file.exists(NORMALIZATION_DEM_PATH)) {
 dem <- stars::read_stars(NORMALIZATION_DEM_PATH)
 nlas <- normalize_height(las, dem)
 nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
+nlas <- st_transform(nlas, 4326)
 
 # # ---- Canopy height model (normalized) ----
 # message("Generating canopy height model...")
@@ -121,12 +122,7 @@ seg <- add_lasattribute(
 # ---- Delineate crown polygons ----
 message("Delineating crown polygons...")
 crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
-st_crs(crown_outlines) <- cs13_m
-
-
-# Transform sf objects to WGS84 (EPSG:4326) for web mapping
-# treetops_web <- st_transform(tree_points %>% st_set_crs(cs13_m), 4326)
-crowns_web <- st_transform(crown_outlines %>% st_set_crs(cs13_m), 4326)
+st_crs(crown_outlines) <- 4326
 
 # 2. Export to GeoJSON
 # delete_dsn = TRUE ensures it overwrites cleanly if you re-run the script
@@ -134,7 +130,7 @@ crowns_web <- st_transform(crown_outlines %>% st_set_crs(cs13_m), 4326)
 # #generated in script 04
 # st_write(treetops_web, "data/vector/treetops.geojson", driver = "GeoJSON", delete_dsn = TRUE)
 
-st_write(crowns_web, "data/vector/crowns.geojson", driver = "GeoJSON", delete_dsn = TRUE)
+st_write(crown_outlines, "data/vector/crowns.geojson", driver = "GeoJSON", delete_dsn = TRUE)
 
 # ---- Save results ----
 message("Saving segmented LAS to: ", OUTPUT_LAS_PATH)

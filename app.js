@@ -17,21 +17,6 @@ const WEB_POINT_CLOUD_MIN_HEIGHT_M = 24; //mirrors config.r
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 
-// LAS normalized heights and local CRS coordinates are in meters.
-// deck.gl position altitude expects metres, so all three axes are scaled here.
-const LAS_UNIT_SCALE = 1;
-
-// Affine transform: local LAS CRS → WGS84
-// Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
-// lon = LON_A*X + LON_B*Y + LON_C
-// lat = LAT_A*X + LAT_B*Y + LAT_C
-const LON_A =  1.56396015e-6;
-const LON_B = -1.26950611e-6;
-const LON_C = -122.50258576;
-const LAT_A =  4.80157997e-7;
-const LAT_B =  3.33684245e-6;
-const LAT_C =  37.64670385;
-
 // ── Viridis-like 5-stop colour scale ──────────────────────────
 const VIRIDIS = [
   [68,   1, 84],
@@ -108,14 +93,6 @@ function segmentColor(treeID, alpha = 200) {
 // ── 3D-viewable helpers ───────────────────────────────────────
 function is3DViewable(ztop) {
   return typeof ztop === "number" && ztop >= WEB_POINT_CLOUD_MIN_HEIGHT_M;
-}
-
-// Convert local LAS CRS coordinates to [longitude, latitude]
-function localToLngLat(x, y) {
-  return [
-    LON_A * x + LON_B * y + LON_C,
-    LAT_A * x + LAT_B * y + LAT_C,
-  ];
 }
 
 function formatTreeIdForFile(treeID, padWidth = MAX_TREE_ID_PAD_WIDTH) {
@@ -771,36 +748,22 @@ async function show3D(selectedTreeID) {
 
     const n = rawTargetPts.length;
 
-    // Derive camera lon/lat from the GeoJSON geometry (WGS84) so the view is
-    // correct for all sites, not just the LHH area the affine transform was fitted on.
-    // LAS coordinates are in feet; scale by LAS_UNIT_SCALE (0.3048) so the affine
-    // (fitted against metre-unit XTOP/YTOP) receives the correct inputs.
-    // The per-tree offset (geomCenter − affine-of-treetop) corrects any residual
-    // translation so the point cloud centre lands on the GeoJSON crown centroid.
-    const geomCenter = featureCentroid(feature);
-    const [affTreetopLon, affTreetopLat] = localToLngLat(
-      props.XTOP * LAS_UNIT_SCALE,
-      props.YTOP * LAS_UNIT_SCALE
-    );
-    const [treetopLon, treetopLat] = geomCenter ?? [affTreetopLon, affTreetopLat];
-    const lonOff = treetopLon - affTreetopLon;
-    const latOff = treetopLat - affTreetopLat;
+    // PLY X/Y are already WGS84 lon/lat (EPSG:4326); use them directly.
+    // Use the polygon centroid from GeoJSON as the camera target for accuracy.
+    const [treetopLon, treetopLat] = featureCentroid(feature) ?? [props.XTOP, props.YTOP];
     const zRange = zMax > zMin ? zMax - zMin : 1;
 
-    // Update deck-legend labels — Z values are feet; convert to metres for display.
+    // Update deck-legend labels
     const dMin = document.getElementById("deck-legend-min");
     const dMax = document.getElementById("deck-legend-max");
-    if (dMin) dMin.textContent = (zMin * LAS_UNIT_SCALE).toFixed(1) + " m";
-    if (dMax) dMax.textContent = (zMax * LAS_UNIT_SCALE).toFixed(1) + " m";
+    if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
+    if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
 
     // Target layer: viridis by elevation
-    const targetPts = rawTargetPts.map(p => {
-      const [lon, lat] = localToLngLat(
-        p.position[0] * LAS_UNIT_SCALE,
-        p.position[1] * LAS_UNIT_SCALE
-      );
-      return { position: [lon + lonOff, lat + latOff, p.position[2] * LAS_UNIT_SCALE], z: p.z };
-    });
+    const targetPts = rawTargetPts.map(p => ({
+      position: [p.position[0], p.position[1], p.position[2]],
+      z: p.z,
+    }));
 
     const targetLayer = new deck.PointCloudLayer({
       id:          "point-cloud-target",
@@ -818,13 +781,10 @@ async function show3D(selectedTreeID) {
     // Background layer: context points coloured by segment ID for review
     let bgLayer = null;
     if (bgResult && bgResult.pts.length > 0) {
-      const bgPts = bgResult.pts.map(p => {
-        const [lon, lat] = localToLngLat(
-          p.position[0] * LAS_UNIT_SCALE,
-          p.position[1] * LAS_UNIT_SCALE
-        );
-        return { position: [lon + lonOff, lat + latOff, p.position[2] * LAS_UNIT_SCALE], treeID: p.treeID };
-      });
+      const bgPts = bgResult.pts.map(p => ({
+        position: [p.position[0], p.position[1], p.position[2]],
+        treeID: p.treeID,
+      }));
       bgLayer = new deck.PointCloudLayer({
         id:          "point-cloud-background",
         data:        bgPts,
@@ -892,7 +852,7 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} target points, height ${(props.ZTOP * LAS_UNIT_SCALE).toFixed(1)} m`);
+    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} target points, height ${props.ZTOP.toFixed(1)} m`);
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
