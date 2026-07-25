@@ -17,9 +17,9 @@ const WEB_POINT_CLOUD_MIN_HEIGHT_M = 24; //mirrors config.r
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 
-// LAS normalized heights and local CRS coordinates are in US survey feet.
+// LAS normalized heights and local CRS coordinates are in meters.
 // deck.gl position altitude expects metres, so all three axes are scaled here.
-const LAS_UNIT_SCALE = 0.3048;
+const LAS_UNIT_SCALE = 1;
 
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
