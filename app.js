@@ -17,6 +17,10 @@ const WEB_POINT_CLOUD_MIN_HEIGHT_M = 24; //mirrors config.r
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 
+// LAS normalized heights and local CRS coordinates are in US survey feet.
+// deck.gl position altitude expects metres, so all three axes are scaled here.
+const LAS_UNIT_SCALE = 0.3048;
+
 // Affine transform: local LAS CRS → WGS84
 // Fitted by least-squares from (XTOP, YTOP) → crown-polygon-centroid pairs in crowns.geojson.
 // lon = LON_A*X + LON_B*Y + LON_C
@@ -769,25 +773,33 @@ async function show3D(selectedTreeID) {
 
     // Derive camera lon/lat from the GeoJSON geometry (WGS84) so the view is
     // correct for all sites, not just the LHH area the affine transform was fitted on.
-    // The affine transform's scale/rotation is still used for relative point positions;
-    // a per-tree offset corrects its translation error for non-LHH trees.
+    // LAS coordinates are in feet; scale by LAS_UNIT_SCALE (0.3048) so the affine
+    // (fitted against metre-unit XTOP/YTOP) receives the correct inputs.
+    // The per-tree offset (geomCenter − affine-of-treetop) corrects any residual
+    // translation so the point cloud centre lands on the GeoJSON crown centroid.
     const geomCenter = featureCentroid(feature);
-    const [affTreetopLon, affTreetopLat] = localToLngLat(props.XTOP, props.YTOP);
+    const [affTreetopLon, affTreetopLat] = localToLngLat(
+      props.XTOP * LAS_UNIT_SCALE,
+      props.YTOP * LAS_UNIT_SCALE
+    );
     const [treetopLon, treetopLat] = geomCenter ?? [affTreetopLon, affTreetopLat];
     const lonOff = treetopLon - affTreetopLon;
     const latOff = treetopLat - affTreetopLat;
     const zRange = zMax > zMin ? zMax - zMin : 1;
 
-    // Update deck-legend labels with target point cloud Z range
+    // Update deck-legend labels — Z values are feet; convert to metres for display.
     const dMin = document.getElementById("deck-legend-min");
     const dMax = document.getElementById("deck-legend-max");
-    if (dMin) dMin.textContent = zMin.toFixed(1) + " m";
-    if (dMax) dMax.textContent = zMax.toFixed(1) + " m";
+    if (dMin) dMin.textContent = (zMin * LAS_UNIT_SCALE).toFixed(1) + " m";
+    if (dMax) dMax.textContent = (zMax * LAS_UNIT_SCALE).toFixed(1) + " m";
 
     // Target layer: viridis by elevation
     const targetPts = rawTargetPts.map(p => {
-      const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon + lonOff, lat + latOff, p.position[2]], z: p.z };
+      const [lon, lat] = localToLngLat(
+        p.position[0] * LAS_UNIT_SCALE,
+        p.position[1] * LAS_UNIT_SCALE
+      );
+      return { position: [lon + lonOff, lat + latOff, p.position[2] * LAS_UNIT_SCALE], z: p.z };
     });
 
     const targetLayer = new deck.PointCloudLayer({
@@ -807,8 +819,11 @@ async function show3D(selectedTreeID) {
     let bgLayer = null;
     if (bgResult && bgResult.pts.length > 0) {
       const bgPts = bgResult.pts.map(p => {
-        const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-        return { position: [lon + lonOff, lat + latOff, p.position[2]], treeID: p.treeID };
+        const [lon, lat] = localToLngLat(
+          p.position[0] * LAS_UNIT_SCALE,
+          p.position[1] * LAS_UNIT_SCALE
+        );
+        return { position: [lon + lonOff, lat + latOff, p.position[2] * LAS_UNIT_SCALE], treeID: p.treeID };
       });
       bgLayer = new deck.PointCloudLayer({
         id:          "point-cloud-background",
@@ -877,7 +892,7 @@ async function show3D(selectedTreeID) {
     deckGL.setProps({ initialViewState: viewState, layers });
     deckHasLayers = true;
     loadingEl.classList.add("hidden");
-    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} target points, height ${props.ZTOP} m`);
+    setStatus(`Tree ${props.treeID} — ${n.toLocaleString()} target points, height ${(props.ZTOP * LAS_UNIT_SCALE).toFixed(1)} m`);
   } catch (err) {
     if (generation !== show3DGeneration) return; // stale
     loadingEl.textContent = `⚠ Could not load point cloud: ${err.message}`;
