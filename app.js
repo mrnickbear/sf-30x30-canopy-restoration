@@ -13,7 +13,7 @@ const DEFAULT_CENTER  = [37.75011333486208, -122.45934823666263];
 const DEFAULT_ZOOM    = 18;
 
 // 3D point cloud threshold (mirrors config.R WEB_POINT_CLOUD_MIN_HEIGHT_M)
-const WEB_POINT_CLOUD_MIN_HEIGHT_M = 42.5;
+const WEB_POINT_CLOUD_MIN_HEIGHT_M = 24; //mirrors config.r
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
 
