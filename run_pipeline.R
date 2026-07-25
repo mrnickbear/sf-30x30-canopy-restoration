@@ -44,14 +44,13 @@ if (!nzchar(OUTPUT_LAS_PATH)) {
 
 # FORCE_SEGMENT = FALSE: skip step 2 when OUTPUT_LAS_PATH already exists.
 # FORCE_SEGMENT = TRUE:  always re-run segmentation (overwrites the saved file).
-FORCE_SEGMENT  <- FALSE
+FORCE_SEGMENT  <- TRUE
 
 RUN_LOAD_DATA  <- TRUE
 RUN_SEGMENT    <- FORCE_SEGMENT || !file.exists(OUTPUT_LAS_PATH)
 
-#Consolidation due to treeID not coming through in saved LAS file
-RUN_VISUALIZE  <- FALSE #consolidated with step 2
-RUN_WEB_PREP   <- FALSE #consolidated with step 2
+RUN_VISUALIZE  <- TRUE #consolidated with step 2
+RUN_WEB_PREP   <- TRUE #consolidated with step 2
 
 # ---- Step 1: Load data ----
 if (RUN_LOAD_DATA) {
