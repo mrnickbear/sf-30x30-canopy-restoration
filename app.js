@@ -754,7 +754,7 @@ async function show3D(selectedTreeID) {
 
   try {
     const targetUrl     = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_target.ply`;
-    const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/bg_tree_${formatTreeIdForFile(props.treeID)}.ply`;
+    const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_bg.ply`;
 
     const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
       loadPlyData(targetUrl),
