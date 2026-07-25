@@ -729,8 +729,8 @@ function initDeckGL() {
 let show3DGeneration = 0;
 
 // Show 3D point cloud for a tree (called from selectTree when tree is viewable).
-// Loads tree_XXXX_target.ply (viridis by elevation) and bg_tree_XXXX.ply
-// (grey context points) separately, then renders both as Deck.gl PointCloudLayers.
+// Loads tree_XXXX_target.ply (viridis by elevation) and tree_XXXX_bg.ply
+// (segment-coloured context points) separately, then renders both as Deck.gl PointCloudLayers.
 async function show3D(selectedTreeID) {
   const generation = ++show3DGeneration;
 
@@ -754,7 +754,7 @@ async function show3D(selectedTreeID) {
 
   try {
     const targetUrl     = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_target.ply`;
-    const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/bg_tree_${formatTreeIdForFile(props.treeID)}.ply`;
+    const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_bg.ply`;
 
     const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
       loadPlyData(targetUrl),
@@ -767,8 +767,15 @@ async function show3D(selectedTreeID) {
 
     const n = rawTargetPts.length;
 
-    // Convert local CRS XY → WGS84 lon/lat; retain Z at true scale.
-    const [treetopLon, treetopLat] = localToLngLat(props.XTOP, props.YTOP);
+    // Derive camera lon/lat from the GeoJSON geometry (WGS84) so the view is
+    // correct for all sites, not just the LHH area the affine transform was fitted on.
+    // The affine transform's scale/rotation is still used for relative point positions;
+    // a per-tree offset corrects its translation error for non-LHH trees.
+    const geomCenter = featureCentroid(feature);
+    const [affTreetopLon, affTreetopLat] = localToLngLat(props.XTOP, props.YTOP);
+    const [treetopLon, treetopLat] = geomCenter ?? [affTreetopLon, affTreetopLat];
+    const lonOff = treetopLon - affTreetopLon;
+    const latOff = treetopLat - affTreetopLat;
     const zRange = zMax > zMin ? zMax - zMin : 1;
 
     // Update deck-legend labels with target point cloud Z range
@@ -780,7 +787,7 @@ async function show3D(selectedTreeID) {
     // Target layer: viridis by elevation
     const targetPts = rawTargetPts.map(p => {
       const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-      return { position: [lon, lat, p.position[2]], z: p.z };
+      return { position: [lon + lonOff, lat + latOff, p.position[2]], z: p.z };
     });
 
     const targetLayer = new deck.PointCloudLayer({
@@ -801,7 +808,7 @@ async function show3D(selectedTreeID) {
     if (bgResult && bgResult.pts.length > 0) {
       const bgPts = bgResult.pts.map(p => {
         const [lon, lat] = localToLngLat(p.position[0], p.position[1]);
-        return { position: [lon, lat, p.position[2]], treeID: p.treeID };
+        return { position: [lon + lonOff, lat + latOff, p.position[2]], treeID: p.treeID };
       });
       bgLayer = new deck.PointCloudLayer({
         id:          "point-cloud-background",
