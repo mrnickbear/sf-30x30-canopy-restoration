@@ -12,6 +12,12 @@
 - Packages to avoid: `terra`, `raster`
 - Avoid absolute paths; always write relative file paths starting from the project root.
 
+## Point Cloud Formats
+- Web-facing per-tree point clouds are stored as **binary PLY files** (`.ply`) in `data/web_point_clouds/`.
+- Do **not** suggest switching to LAS, LAZ, or any other point cloud format for web export. The PLY format is the deliberate project choice.
+- Two files are written per tree: `tree_XXXX_target.ply` (target tree points) and `tree_XXXX_bg.ply` (background context points with `treeID` attribute).
+
 ## Response Style
 - Provide clean, production-ready R code blocks.
 - Keep explanations brief and technical.
+
