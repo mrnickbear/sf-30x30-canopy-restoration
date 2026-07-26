@@ -31,8 +31,6 @@
 #   servr::daemon_stop(my_server)
 #   servr::daemon_stop() #shut down all servers
 
-sf_use_s2(FALSE)
-
 
 # ---- Configuration ----
 # Clear the global environment, then load shared settings.
@@ -87,6 +85,3 @@ if (RUN_WEB_PREP) {
 }
 
 message("\nPipeline complete.")
-
-#Turn s2 back on if needed for other spatial workflows
-sf_use_s2(TRUE)

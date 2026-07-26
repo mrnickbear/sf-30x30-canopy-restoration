@@ -26,6 +26,11 @@ const VIRIDIS = [
   [253, 231, 37],
 ];
 
+// ── 3D point display sizes ──────────────────────────
+
+const targetSize = 2.5;  // size of points in the target layer
+const bgSize = 1;  // size of points in the background layer 
+
 function viridisColor(t) {
   // t in [0,1] → interpolated RGB
   const n = VIRIDIS.length - 1;
@@ -774,7 +779,7 @@ async function show3D(selectedTreeID) {
         const rgb = viridisColor(t);
         return [rgb[0], rgb[1], rgb[2], 255];
       },
-      pointSize: 2,
+      pointSize: targetSize,
       updateTriggers: { getColor: [zMin, zRange] },
     });
 
@@ -792,7 +797,7 @@ async function show3D(selectedTreeID) {
         getColor:    d => d.treeID !== null
           ? segmentColor(d.treeID)
           : [150, 150, 150, 140],
-        pointSize:   2,
+        pointSize:   bgSize,
       });
     }
 
