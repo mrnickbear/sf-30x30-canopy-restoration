@@ -69,6 +69,7 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
 seg <- readLAS(OUTPUT_LAS_PATH)
+st_crs(seg) <- 4326
 
 # plot(seg, color = "treeID") #This is the ID we need to use consistently!!
 
@@ -113,7 +114,11 @@ tree_points <- st_sf(
     ),
     crs = st_crs(seg)
   )
-)
+  )
+st_crs(tree_points) <- cs13_m  
+
+tree_points <- st_transform(tree_points, 4326)
+
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
 if (nrow(clip_windows) == 0) {
   stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
@@ -134,6 +139,7 @@ written <- 0L
 crown_las_map <- list()
 
 for (i in seq_len(nrow(clip_windows))) {
+  # i <- 1
   tree_id <- clip_windows$treeID[i]
   target_path <- file.path(
     WEB_POINT_CLOUD_DIR,

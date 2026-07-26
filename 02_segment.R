@@ -37,7 +37,7 @@ if (!file.exists(NORMALIZATION_DEM_PATH)) {
 dem <- stars::read_stars(NORMALIZATION_DEM_PATH)
 nlas <- normalize_height(las, dem)
 nlas <- filter_poi(nlas, Z > MIN_HEIGHT_M)
-nlas <- st_transform(nlas, 4326)
+# nlas <- st_transform(nlas, 4326)  #segmentation merges all together if lat lon?
 
 # # ---- Canopy height model (normalized) ----
 # message("Generating canopy height model...")
@@ -113,6 +113,7 @@ seg <- add_lasattribute(
   desc = "Unique tree ID from segmentation"
 )
 
+
 # #TURN OFF - ID DOESN'T MATCH
 # # ---- Crown metrics ----
 # message("Computing crown metrics...")
@@ -122,7 +123,20 @@ seg <- add_lasattribute(
 # ---- Delineate crown polygons ----
 message("Delineating crown polygons...")
 crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
-st_crs(crown_outlines) <- 4326
+
+# ---- Crown metrics ----
+message("Computing crown metrics...")
+metrics <- crown_metrics(las = seg, func = .stdtreemetrics)
+
+# 1. Turn off s2 geometry engine
+sf_use_s2(FALSE)
+
+seg <- st_transform(seg, 4326)
+metrics <- st_transform(metrics, 4326)
+crown_outlines <- st_transform(crown_outlines, 4326)
+
+#Turn s2 back on if needed for other spatial workflows
+sf_use_s2(TRUE)
 
 # 2. Export to GeoJSON
 # delete_dsn = TRUE ensures it overwrites cleanly if you re-run the script

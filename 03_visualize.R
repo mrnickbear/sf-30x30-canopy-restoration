@@ -37,10 +37,6 @@ if (is.null(seg) || !"treeID" %in% names(seg@data)) {
 #        "or set RUN_LOAD_DATA = TRUE in run_pipeline.R.")
 # }
 
-# ---- Crown metrics ----
-message("Computing crown metrics...")
-metrics <- crown_metrics(las = seg, func = .stdtreemetrics)
-st_crs(metrics) <- 4326
 
 # ---- Identify snag points ----
 # Snag class codes (Wing 2015):
@@ -51,10 +47,6 @@ st_crs(metrics) <- 4326
 #   4 = High canopy cover snag
 # snags <- filter_poi(seg_snags, snagCls > 0)
 
-# ---- Delineate crown polygons ----
-message("Delineating crown polygons...")
-crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
-st_crs(crown_outlines) <- 4326
 
 # snag_outlines <- st_as_sf(delineate_crowns(snags, attribute = "treeID"))
 # st_crs(snag_outlines) <- cs13_m
