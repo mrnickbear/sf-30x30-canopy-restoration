@@ -21,7 +21,7 @@ Run them in order, or use `run_pipeline.R` to execute all steps at once.
 | `01_load_data.R` | Load the LiDAR catalog (`data/raw_point_clouds/`) and clip to the analysis area. |
 | `02_segment.R` | Normalize heights, detect tree tops, segment trees, classify snags, and **save** the result to `data/raw_point_clouds/LHH_aa_z3segssnags.las`. |
 | `03_visualize.R` | Load the saved LAS, compute crown metrics, and display an interactive map on the SF Pictometry 2024 aerial. |
-| `04_pointcloud_web_prep.R` | Use `data/vector/crowns.geojson` to export one buffered uncompressed `.las` per tree taller than 30 m into `data/web_point_clouds/`. |
+| `04_pointcloud_web_prep.R` | Use `data/vector/crowns.geojson` to export per-tree binary `.ply` point clouds for the web into `data/web_point_clouds/`. |
 | `run_pipeline.R` | Master runner – sources each step in order with configurable flags. |
 | `LHHtrees2023/app.R` | Shiny app for interactive exploration; can be deployed to shinyapps.io. |
 
@@ -43,8 +43,19 @@ You can also run individual steps directly:
 source("01_load_data.R")   # populates `las` in memory
 source("02_segment.R")     # uses `las`; saves result to disk
 source("03_visualize.R")   # reads from disk; opens interactive map
-source("04_pointcloud_web_prep.R")  # writes per-tree LAS files for the web
+source("04_pointcloud_web_prep.R")  # writes per-tree PLY files for the web
 ```
+
+### Current 3D point-cloud spacing artifact
+
+The deck.gl view is not re-voxelizing the canopy points. The regular spacing comes
+from the export format in `04_pointcloud_web_prep.R`: the script transforms `X/Y`
+to WGS84 longitude/latitude and writes them to PLY as `property float x/y/z`
+(IEEE-754 float32). Around Laguna Honda, float32 longitude steps are about
+`7.629395e-06` degrees and latitude steps are about `3.814697e-06` degrees, which
+is roughly `0.67 m × 0.42 m` on the ground. That precision is coarse enough for
+many nearby canopy points to collapse onto a regular horizontal/vertical grid in
+the browser even though the source LAS is not gridded.
 
 ### Test area vs. full area
 

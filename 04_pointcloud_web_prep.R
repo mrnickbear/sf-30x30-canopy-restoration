@@ -18,6 +18,8 @@ library(jsonlite)
 
 # Write a binary little-endian PLY with float x/y/z only (no treeID).
 # Used for the target-tree point cloud (viridis-coloured by elevation in the browser).
+# Because x/y are written as float32 after conversion to WGS84 lon/lat, nearby
+# points can quantize onto a visible ~0.4-0.7 m grid in deck.gl at SF coordinates.
 write_ply_xyz <- function(xyz, path) {
   n <- nrow(xyz)
   header <- paste0(
@@ -198,7 +200,8 @@ for (i in seq_len(nrow(clip_windows))) {
   }
 
   # Project X/Y from CS13 to WGS84 explicitly via sf so that PLY coordinates
-  # are reliable longitude/latitude values for app.js to use directly.
+  # are reliable longitude/latitude values for app.js to use directly. Writing
+  # those lon/lat values as float32 is what introduces the browser grid artifact.
   pts_wgs <- st_transform(
     st_as_sf(data.frame(X = clipped_las@data$X, Y = clipped_las@data$Y),
              coords = c("X", "Y"), crs = cs13_m),
@@ -251,5 +254,4 @@ message(
 # mapview(crown_outlines)
 # test <- readLAS("data/web_point_clouds/tree_37.las")
 # plot(test)
-
 
