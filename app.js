@@ -896,5 +896,19 @@ function showMap() {
 // Stub kept so selectTree() references remain valid if deckGL isn't yet created
 function renderDeckLayers() {}
 
+// ── Keyboard shortcut: M toggles between map and 3D view ─────
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea, select")) return;
+  if (e.key !== "m" && e.key !== "M") return;
+  const deckContainer = document.getElementById("deck-container");
+  if (!deckContainer) return;
+  const in3D = !deckContainer.classList.contains("hidden");
+  if (in3D) {
+    showMap();
+  } else if (selectedId !== null) {
+    show3D(selectedId);
+  }
+});
+
 // ── Boot ──────────────────────────────────────────────────────
 init();
