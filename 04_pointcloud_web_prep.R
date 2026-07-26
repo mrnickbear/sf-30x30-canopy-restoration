@@ -69,7 +69,7 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
 seg <- readLAS(OUTPUT_LAS_PATH)
-st_crs(seg) <- 4326
+st_crs(seg) <- cs13_m
 
 # plot(seg, color = "treeID") #This is the ID we need to use consistently!!
 
@@ -118,7 +118,6 @@ tree_points <- st_sf(
 st_crs(tree_points) <- cs13_m  
 
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
-clip_windows <- st_transform(clip_windows, 4326)
 if (nrow(clip_windows) == 0) {
   stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
 }
@@ -137,6 +136,12 @@ written <- 0L
 # Written to crown_las_map.json so app.js can colour the correct tree.
 crown_las_map <- list()
 
+# library(mapview)
+# mapview(clip_windows)
+
+
+
+
 for (i in seq_len(nrow(clip_windows))) {
   # i <- 1
   tree_id <- clip_windows$treeID[i]
@@ -154,6 +159,14 @@ for (i in seq_len(nrow(clip_windows))) {
     message("Skipping tree ", tree_id, ": no points found in buffered clip.")
     next
   }
+  
+  # 1. Turn off s2 geometry engine
+  sf_use_s2(FALSE)
+  
+  clipped_las <- st_transform(clipped_las, 4326)  #Transform after all other operations including clip, segment...
+  
+  #Turn s2 back on if needed for other spatial workflows
+  sf_use_s2(TRUE)
 
   # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
   if ("treeID" %in% names(clipped_las@data)) {
@@ -175,7 +188,7 @@ for (i in seq_len(nrow(clip_windows))) {
     write_ply_with_treeid(
       as.matrix(bg_subset[, .(X, Y, Z)]),
       bg_subset$treeID,
-      bg_path
+      bg_path 
     )
     message("Wrote ", bg_path)
   }

@@ -29,6 +29,9 @@
 #   Then browse to http://localhost:8080/
 #   # 2. When you are done, shut down only that specific server
 #   servr::daemon_stop(my_server)
+#   servr::daemon_stop() #shut down all servers
+
+sf_use_s2(FALSE)
 
 
 # ---- Configuration ----
@@ -84,3 +87,6 @@ if (RUN_WEB_PREP) {
 }
 
 message("\nPipeline complete.")
+
+#Turn s2 back on if needed for other spatial workflows
+sf_use_s2(TRUE)
