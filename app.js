@@ -157,23 +157,41 @@ async function loadPlyData(url) {
       const typeStr = parts[1];
       const size    = PLY_TYPE_SIZES[typeStr];
       if (size === undefined) throw new Error(`PLY: unknown property type "${typeStr}"`);
-      props.push({ name: parts[2], size });
+      props.push({ name: parts[2], size, typeStr });
     }
   }
 
   const stride = props.reduce((s, p) => s + p.size, 0);
-  const findOffset = (name, required = true) => {
+  const findProp = (name, required = true) => {
     const idx = props.findIndex(p => p.name === name);
     if (idx < 0) {
       if (required) throw new Error(`PLY: vertex property "${name}" not found`);
       return null;
     }
-    return props.slice(0, idx).reduce((s, p) => s + p.size, 0);
+    const offset = props.slice(0, idx).reduce((s, p) => s + p.size, 0);
+    return { offset, typeStr: props[idx].typeStr };
   };
-  const xOff      = findOffset("x");
-  const yOff      = findOffset("y");
-  const zOff      = findOffset("z");
-  const treeIDOff = findOffset("treeID", false);  // optional — present in bg files
+  const xProp      = findProp("x");
+  const yProp      = findProp("y");
+  const zProp      = findProp("z");
+  const treeIDProp = findProp("treeID", false);  // optional — present in bg files
+
+  // Return a reader function for a scalar property based on its PLY type.
+  const makeReader = (typeStr) => {
+    if (typeStr === "double" || typeStr === "float64")
+      return (dv, off) => dv.getFloat64(off, true);
+    if (typeStr === "float" || typeStr === "float32")
+      return (dv, off) => dv.getFloat32(off, true);
+    if (typeStr === "int" || typeStr === "int32")
+      return (dv, off) => dv.getInt32(off, true);
+    if (typeStr === "uint" || typeStr === "uint32")
+      return (dv, off) => dv.getUint32(off, true);
+    // Fallback: treat as float32
+    return (dv, off) => dv.getFloat32(off, true);
+  };
+  const readX      = makeReader(xProp.typeStr);
+  const readY      = makeReader(yProp.typeStr);
+  const readZ      = makeReader(zProp.typeStr);
 
   const view   = new DataView(buffer, headerEnd);
   const pts    = new Array(numPoints);
@@ -181,12 +199,14 @@ async function loadPlyData(url) {
 
   for (let i = 0; i < numPoints; i++) {
     const base = i * stride;
-    const x = view.getFloat32(base + xOff, true);
-    const y = view.getFloat32(base + yOff, true);
-    const z = view.getFloat32(base + zOff, true);
+    const x = readX(view, base + xProp.offset);
+    const y = readY(view, base + yProp.offset);
+    const z = readZ(view, base + zProp.offset);
     if (z < zMin) zMin = z;
     if (z > zMax) zMax = z;
-    const treeID = treeIDOff !== null ? view.getInt32(base + treeIDOff, true) : null;
+    const treeID = treeIDProp !== null
+      ? view.getInt32(base + treeIDProp.offset, true)
+      : null;
     pts[i] = { position: [x, y, z], z, treeID };
   }
 

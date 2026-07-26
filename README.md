@@ -46,17 +46,6 @@ source("03_visualize.R")   # reads from disk; opens interactive map
 source("04_pointcloud_web_prep.R")  # writes per-tree PLY files for the web
 ```
 
-### Current 3D point-cloud spacing artifact
-
-The deck.gl view is not re-voxelizing the canopy points. The regular spacing comes
-from the export format in `04_pointcloud_web_prep.R`: the script transforms `X/Y`
-to WGS84 longitude/latitude and writes them to PLY as `property float x/y/z`
-(IEEE-754 float32). Around Laguna Honda, float32 longitude steps are about
-`7.629395e-06` degrees and latitude steps are about `3.814697e-06` degrees, which
-is roughly `0.67 m × 0.42 m` on the ground. That precision is coarse enough for
-many nearby canopy points to collapse onto a regular horizontal/vertical grid in
-the browser even though the source LAS is not gridded.
-
 ### Test area vs. full area
 
 Edit `USE_CUSTOM_CIRCLE` in `config.R`:
