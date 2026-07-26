@@ -16,25 +16,28 @@ library(lidR)
 library(sf)
 library(jsonlite)
 
-# Write a binary little-endian PLY with float x/y/z only (no treeID).
-# Used for the target-tree point cloud (viridis-coloured by elevation in the browser).
+# Write a binary little-endian PLY with double x/y + float z only (no treeID).
+# x and y are stored as float64 (double) to preserve WGS84 lon/lat at full
+# precision (~1e-11 deg ≈ sub-millimetre), avoiding the visible grid artifact
+# that float32 produced at SF coordinates (~0.4-0.7 m steps).
+# z remains float32 because it is in normalised metres and float32 is sufficient.
 write_ply_xyz <- function(xyz, path) {
   n <- nrow(xyz)
   header <- paste0(
     "ply\n",
     "format binary_little_endian 1.0\n",
     "element vertex ", n, "\n",
-    "property float x\n",
-    "property float y\n",
+    "property double x\n",
+    "property double y\n",
     "property float z\n",
     "end_header\n"
   )
-  x_bytes <- writeBin(as.double(c(xyz[, 1])), raw(), size = 4, endian = "little")
-  y_bytes <- writeBin(as.double(c(xyz[, 2])), raw(), size = 4, endian = "little")
+  x_bytes <- writeBin(as.double(c(xyz[, 1])), raw(), size = 8, endian = "little")
+  y_bytes <- writeBin(as.double(c(xyz[, 2])), raw(), size = 8, endian = "little")
   z_bytes <- writeBin(as.double(c(xyz[, 3])), raw(), size = 4, endian = "little")
   body <- c(rbind(
-    matrix(x_bytes, nrow = 4),
-    matrix(y_bytes, nrow = 4),
+    matrix(x_bytes, nrow = 8),
+    matrix(y_bytes, nrow = 8),
     matrix(z_bytes, nrow = 4)
   ))
   con <- file(path, "wb")
@@ -43,7 +46,9 @@ write_ply_xyz <- function(xyz, path) {
   close(con)
 }
 
-# Write a binary little-endian PLY with float x/y/z + int treeID per vertex.
+# Write a binary little-endian PLY with double x/y + float z + int treeID per vertex.
+# x and y are stored as float64 (double) to avoid the WGS84 lon/lat quantization
+# artifact; z and treeID remain 32-bit.
 # This preserves segment labels for per-tree colouring in the browser.
 write_ply_with_treeid <- function(xyz, treeids, path) {
   n <- nrow(xyz)
@@ -51,26 +56,28 @@ write_ply_with_treeid <- function(xyz, treeids, path) {
     "ply\n",
     "format binary_little_endian 1.0\n",
     "element vertex ", n, "\n",
-    "property float x\n",
-    "property float y\n",
+    "property double x\n",
+    "property double y\n",
     "property float z\n",
     "property int treeID\n",
     "end_header\n"
   )
-  # Build interleaved binary buffer: 16 bytes per vertex
-  # (x, y, z as float32; treeID as int32), all little-endian.
-  # as.double() + size=4 writes IEEE 754 single-precision; as.single() attaches
+  # Build interleaved binary buffer: 24 bytes per vertex
+  # (x, y as float64; z as float32; treeID as int32), all little-endian.
+  # as.double() + size=8 writes IEEE 754 double-precision for x/y; size=4 for z.
+  # as.double() + size=4 writes IEEE 754 single-precision for z; as.single() attaches
   # a class attribute that makes is.vector() return FALSE, causing writeBin to
   # error with "can only write vector objects".
-  x_bytes  <- writeBin(as.double(c(xyz[, 1])),  raw(), size = 4, endian = "little")
-  y_bytes  <- writeBin(as.double(c(xyz[, 2])),  raw(), size = 4, endian = "little")
+  x_bytes  <- writeBin(as.double(c(xyz[, 1])),  raw(), size = 8, endian = "little")
+  y_bytes  <- writeBin(as.double(c(xyz[, 2])),  raw(), size = 8, endian = "little")
   z_bytes  <- writeBin(as.double(c(xyz[, 3])),  raw(), size = 4, endian = "little")
   id_bytes <- writeBin(as.integer(c(treeids)),   raw(), size = 4, endian = "little")
-  # Reshape each to 4 × n and rbind → 16 × n; c() iterates column-major so
-  # each column (= one vertex) is written as [x0..x3 y0..y3 z0..z3 id0..id3].
+  # Reshape each to bytes-per-field × n and rbind → 24 × n; c() iterates
+  # column-major so each column (= one vertex) is written as
+  # [x0..x7 y0..y7 z0..z3 id0..id3].
   body <- c(rbind(
-    matrix(x_bytes,  nrow = 4),
-    matrix(y_bytes,  nrow = 4),
+    matrix(x_bytes,  nrow = 8),
+    matrix(y_bytes,  nrow = 8),
     matrix(z_bytes,  nrow = 4),
     matrix(id_bytes, nrow = 4)
   ))
@@ -198,7 +205,8 @@ for (i in seq_len(nrow(clip_windows))) {
   }
 
   # Project X/Y from CS13 to WGS84 explicitly via sf so that PLY coordinates
-  # are reliable longitude/latitude values for app.js to use directly.
+  # are reliable longitude/latitude values for app.js to use directly. Writing
+  # those lon/lat values as float32 is what introduces the browser grid artifact.
   pts_wgs <- st_transform(
     st_as_sf(data.frame(X = clipped_las@data$X, Y = clipped_las@data$Y),
              coords = c("X", "Y"), crs = cs13_m),
@@ -251,5 +259,4 @@ message(
 # mapview(crown_outlines)
 # test <- readLAS("data/web_point_clouds/tree_37.las")
 # plot(test)
-
 
