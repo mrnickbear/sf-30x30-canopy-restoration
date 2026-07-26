@@ -16,6 +16,7 @@ const DEFAULT_ZOOM    = 18;
 const WEB_POINT_CLOUD_MIN_HEIGHT_M = 24; //mirrors config.r
 const WEB_POINT_CLOUD_DIR          = "data/web_point_clouds";
 const MAX_TREE_ID_PAD_WIDTH        = 4;
+const CROWN_LAS_MAP_JSON           = `${WEB_POINT_CLOUD_DIR}/crown_las_map.json`;
 
 // ── Viridis-like 5-stop colour scale ──────────────────────────
 const VIRIDIS = [
@@ -237,6 +238,24 @@ async function loadDanTrail() {
     console.warn("Dan's Lost Trail KML could not be loaded:", err);
   }
   return danTrailCoords;
+}
+
+let crownLasMap = null;
+
+async function loadCrownLasMap() {
+  if (crownLasMap !== null) return crownLasMap;
+  try {
+    const response = await fetch(CROWN_LAS_MAP_JSON);
+    if (!response.ok) {
+      crownLasMap = {};
+      return crownLasMap;
+    }
+    crownLasMap = await response.json();
+  } catch (err) {
+    console.warn("crown_las_map.json could not be loaded:", err);
+    crownLasMap = {};
+  }
+  return crownLasMap;
 }
 
 // ── Shared state ──────────────────────────────────────────────
@@ -762,15 +781,41 @@ async function show3D(selectedTreeID) {
     const targetUrl     = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_target.ply`;
     const backgroundUrl = `${WEB_POINT_CLOUD_DIR}/tree_${formatTreeIdForFile(props.treeID)}_bg.ply`;
 
-    const [{ pts: rawTargetPts, zMin, zMax }, bgResult, trailCoords] = await Promise.all([
-      loadPlyData(targetUrl),
+    const [targetResult, bgResult, trailCoords, lasMap] = await Promise.all([
+      loadPlyData(targetUrl).catch(() => null),
       loadPlyData(backgroundUrl).catch(() => null),   // background file is optional
       loadDanTrail(),
+      loadCrownLasMap(),
     ]);
+
+    let resolvedTarget = targetResult;
+    if (!resolvedTarget && bgResult && bgResult.pts.length > 0) {
+      const fallbackIds = [];
+      const crownId = Number(props.treeID);
+      const mappedId = Number(lasMap[String(props.treeID)]);
+      if (Number.isInteger(mappedId)) fallbackIds.push(mappedId);
+      if (Number.isInteger(crownId) && !fallbackIds.includes(crownId)) fallbackIds.push(crownId);
+
+      for (const fallbackId of fallbackIds) {
+        const fallbackPts = bgResult.pts.filter(p => p.treeID === fallbackId);
+        if (fallbackPts.length > 0) {
+          let zMinFallback = Infinity;
+          let zMaxFallback = -Infinity;
+          for (const p of fallbackPts) {
+            if (p.z < zMinFallback) zMinFallback = p.z;
+            if (p.z > zMaxFallback) zMaxFallback = p.z;
+          }
+          resolvedTarget = { pts: fallbackPts, zMin: zMinFallback, zMax: zMaxFallback };
+          break;
+        }
+      }
+    }
+    if (!resolvedTarget) throw new Error("target point cloud not found");
 
     // Bail out if the user has already selected a different tree
     if (generation !== show3DGeneration) return;
 
+    const { pts: rawTargetPts, zMin, zMax } = resolvedTarget;
     const n = rawTargetPts.length;
 
     // PLY X/Y are already WGS84 lon/lat (EPSG:4326); use them directly.
