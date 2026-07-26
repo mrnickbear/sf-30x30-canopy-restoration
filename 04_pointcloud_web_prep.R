@@ -15,8 +15,33 @@ source("config.R")
 library(lidR)
 library(sf)
 library(jsonlite)
-# library(data.table) #fwrite
-library(Rvcg) #ply write (target only)
+
+# Write a binary little-endian PLY with float x/y/z only (no treeID).
+# Used for the target-tree point cloud (viridis-coloured by elevation in the browser).
+write_ply_xyz <- function(xyz, path) {
+  n <- nrow(xyz)
+  header <- paste0(
+    "ply\n",
+    "format binary_little_endian 1.0\n",
+    "element vertex ", n, "\n",
+    "property float x\n",
+    "property float y\n",
+    "property float z\n",
+    "end_header\n"
+  )
+  x_bytes <- writeBin(as.double(c(xyz[, 1])), raw(), size = 4, endian = "little")
+  y_bytes <- writeBin(as.double(c(xyz[, 2])), raw(), size = 4, endian = "little")
+  z_bytes <- writeBin(as.double(c(xyz[, 3])), raw(), size = 4, endian = "little")
+  body <- c(rbind(
+    matrix(x_bytes, nrow = 4),
+    matrix(y_bytes, nrow = 4),
+    matrix(z_bytes, nrow = 4)
+  ))
+  con <- file(path, "wb")
+  writeBin(charToRaw(header), con)
+  writeBin(body, con)
+  close(con)
+}
 
 # Write a binary little-endian PLY with float x/y/z + int treeID per vertex.
 # This preserves segment labels for per-tree colouring in the browser.
@@ -69,6 +94,7 @@ if (!file.exists(OUTPUT_LAS_PATH)) {
 
 message("Loading segmented LAS from: ", OUTPUT_LAS_PATH)
 seg <- readLAS(OUTPUT_LAS_PATH)
+st_crs(seg) <- cs13_m
 
 # plot(seg, color = "treeID") #This is the ID we need to use consistently!!
 
@@ -113,7 +139,9 @@ tree_points <- st_sf(
     ),
     crs = st_crs(seg)
   )
-)
+  )
+st_crs(tree_points) <- cs13_m  
+
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
 if (nrow(clip_windows) == 0) {
   stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
@@ -133,7 +161,14 @@ written <- 0L
 # Written to crown_las_map.json so app.js can colour the correct tree.
 crown_las_map <- list()
 
+# library(mapview)
+# mapview(clip_windows)
+
+
+
+
 for (i in seq_len(nrow(clip_windows))) {
+  # i <- 1
   tree_id <- clip_windows$treeID[i]
   target_path <- file.path(
     WEB_POINT_CLOUD_DIR,
@@ -151,6 +186,7 @@ for (i in seq_len(nrow(clip_windows))) {
   }
 
   # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
+  # Uses CS13 coordinates (same CRS as XTOP/YTOP) for correct distance calculation.
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
@@ -161,15 +197,35 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
 
-  # Save target (points belonging to this tree) and background (all other points).
-  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
-  message("Wrote ", target_path)
+  # Project X/Y from CS13 to WGS84 explicitly via sf so that PLY coordinates
+  # are reliable longitude/latitude values for app.js to use directly.
+  pts_wgs <- st_transform(
+    st_as_sf(data.frame(X = clipped_las@data$X, Y = clipped_las@data$Y),
+             coords = c("X", "Y"), crs = cs13_m),
+    4326
+  )
+  wgs_xy <- st_coordinates(pts_wgs)  # n × 2: [longitude, latitude]
+  lon    <- wgs_xy[, 1]
+  lat    <- wgs_xy[, 2]
+  z_all  <- clipped_las@data$Z
+  ids    <- clipped_las@data$treeID
 
-  bg_subset <- clipped_las@data[treeID != tree_id, .(X, Y, Z, treeID)]
-  if (nrow(bg_subset) > 0) {
+  # Write target PLY (points for this tree, WGS84 lon/lat/Z).
+  is_target <- ids == tree_id
+  if (any(is_target)) {
+    write_ply_xyz(
+      cbind(lon[is_target], lat[is_target], z_all[is_target]),
+      target_path
+    )
+    message("Wrote ", target_path)
+  }
+
+  # Write background PLY (all other buffer points, WGS84 lon/lat/Z + treeID).
+  is_bg <- !is_target
+  if (any(is_bg)) {
     write_ply_with_treeid(
-      as.matrix(bg_subset[, .(X, Y, Z)]),
-      bg_subset$treeID,
+      cbind(lon[is_bg], lat[is_bg], z_all[is_bg]),
+      ids[is_bg],
       bg_path
     )
     message("Wrote ", bg_path)

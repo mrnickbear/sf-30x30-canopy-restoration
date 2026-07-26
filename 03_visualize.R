@@ -37,10 +37,6 @@ if (is.null(seg) || !"treeID" %in% names(seg@data)) {
 #        "or set RUN_LOAD_DATA = TRUE in run_pipeline.R.")
 # }
 
-# ---- Crown metrics ----
-message("Computing crown metrics...")
-metrics <- crown_metrics(las = seg, func = .stdtreemetrics)
-st_crs(metrics) <- cs13_m
 
 # ---- Identify snag points ----
 # Snag class codes (Wing 2015):
@@ -51,10 +47,6 @@ st_crs(metrics) <- cs13_m
 #   4 = High canopy cover snag
 # snags <- filter_poi(seg_snags, snagCls > 0)
 
-# ---- Delineate crown polygons ----
-message("Delineating crown polygons...")
-crown_outlines <- st_as_sf(delineate_crowns(seg, attribute = "treeID"))
-st_crs(crown_outlines) <- cs13_m
 
 # snag_outlines <- st_as_sf(delineate_crowns(snags, attribute = "treeID"))
 # st_crs(snag_outlines) <- cs13_m
@@ -84,16 +76,3 @@ tmap_sf_aerial <-
 #print to RStudio Viewer for checking during the pipeline
 print(tmap_sf_aerial) 
 
-
-
-# Transform sf objects to WGS84 (EPSG:4326) for web mapping
-treetops_web <- st_transform(metrics, 4326)
-crowns_web <- st_transform(crown_outlines, 4326)
-
-# 2. Export to GeoJSON
-# delete_dsn = TRUE ensures it overwrites cleanly if you re-run the script
-
-# #generated in script 04
-# st_write(treetops_web, "data/vector/treetops.geojson", driver = "GeoJSON", delete_dsn = TRUE)
-
-st_write(crowns_web, "data/vector/crowns.geojson", driver = "GeoJSON", delete_dsn = TRUE)

@@ -29,6 +29,7 @@
 #   Then browse to http://localhost:8080/
 #   # 2. When you are done, shut down only that specific server
 #   servr::daemon_stop(my_server)
+#   servr::daemon_stop() #shut down all servers
 
 
 # ---- Configuration ----

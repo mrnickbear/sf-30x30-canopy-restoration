@@ -38,7 +38,7 @@ CIRCLE_RADIUS   <- 20   # meters
 
 # ---- Processing Parameters ----
 CHM_RES          <- 0.5   # Canopy height model resolution (meters)
-MIN_HEIGHT_M     <- 1     # Drop points below this height after normalization (meters)
+MIN_HEIGHT_M     <- 1     # Drop points below this height after normalization (meters)  (1m includes safe hit posts)
 TREE_DETECTION_WS <- 10  # Window size for local maximum filter (lmf)
 
 # Snag classification thresholds (Wing et al. 2015 BBPRthrsh_mat)
