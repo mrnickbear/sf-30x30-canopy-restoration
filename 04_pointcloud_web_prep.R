@@ -194,13 +194,15 @@ for (i in seq_len(nrow(clip_windows))) {
 
   # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
   # Uses CS13 coordinates (same CRS as XTOP/YTOP) for correct distance calculation.
+  target_las_id <- tree_id
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
     dists_sq <- (clipped_las@data$X - xtop)^2 + (clipped_las@data$Y - ytop)^2
     nearest_tid <- clipped_las@data$treeID[which.min(dists_sq)]
     if (!is.na(nearest_tid)) {
-      crown_las_map[[as.character(tree_id)]] <- as.integer(nearest_tid)
+      target_las_id <- as.integer(nearest_tid)
+      crown_las_map[[as.character(tree_id)]] <- target_las_id
     }
   }
 
@@ -219,7 +221,7 @@ for (i in seq_len(nrow(clip_windows))) {
   ids    <- clipped_las@data$treeID
 
   # Write target PLY (points for this tree, WGS84 lon/lat/Z).
-  is_target <- ids == tree_id
+  is_target <- ids == target_las_id
   if (any(is_target)) {
     write_ply_xyz(
       cbind(lon[is_target], lat[is_target], z_all[is_target]),
@@ -259,4 +261,3 @@ message(
 # mapview(crown_outlines)
 # test <- readLAS("data/web_point_clouds/tree_37.las")
 # plot(test)
-
