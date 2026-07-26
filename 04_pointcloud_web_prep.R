@@ -15,8 +15,33 @@ source("config.R")
 library(lidR)
 library(sf)
 library(jsonlite)
-# library(data.table) #fwrite
-library(Rvcg) #ply write (target only)
+
+# Write a binary little-endian PLY with float x/y/z only (no treeID).
+# Used for the target-tree point cloud (viridis-coloured by elevation in the browser).
+write_ply_xyz <- function(xyz, path) {
+  n <- nrow(xyz)
+  header <- paste0(
+    "ply\n",
+    "format binary_little_endian 1.0\n",
+    "element vertex ", n, "\n",
+    "property float x\n",
+    "property float y\n",
+    "property float z\n",
+    "end_header\n"
+  )
+  x_bytes <- writeBin(as.double(c(xyz[, 1])), raw(), size = 4, endian = "little")
+  y_bytes <- writeBin(as.double(c(xyz[, 2])), raw(), size = 4, endian = "little")
+  z_bytes <- writeBin(as.double(c(xyz[, 3])), raw(), size = 4, endian = "little")
+  body <- c(rbind(
+    matrix(x_bytes, nrow = 4),
+    matrix(y_bytes, nrow = 4),
+    matrix(z_bytes, nrow = 4)
+  ))
+  con <- file(path, "wb")
+  writeBin(charToRaw(header), con)
+  writeBin(body, con)
+  close(con)
+}
 
 # Write a binary little-endian PLY with float x/y/z + int treeID per vertex.
 # This preserves segment labels for per-tree colouring in the browser.
@@ -159,16 +184,9 @@ for (i in seq_len(nrow(clip_windows))) {
     message("Skipping tree ", tree_id, ": no points found in buffered clip.")
     next
   }
-  
-  # 1. Turn off s2 geometry engine
-  sf_use_s2(FALSE)
-  
-  clipped_las <- st_transform(clipped_las, 4326)  #Transform after all other operations including clip, segment...
-  
-  #Turn s2 back on if needed for other spatial workflows
-  sf_use_s2(TRUE)
 
   # Record the LAS treeID of the point nearest the crown treetop for crown_las_map.json.
+  # Uses CS13 coordinates (same CRS as XTOP/YTOP) for correct distance calculation.
   if ("treeID" %in% names(clipped_las@data)) {
     xtop <- clip_windows$XTOP[i]
     ytop <- clip_windows$YTOP[i]
@@ -179,16 +197,36 @@ for (i in seq_len(nrow(clip_windows))) {
     }
   }
 
-  # Save target (points belonging to this tree) and background (all other points).
-  vcgPlyWrite(as.matrix(clipped_las@data[treeID == tree_id, .(X, Y, Z)]), target_path)
-  message("Wrote ", target_path)
+  # Project X/Y from CS13 to WGS84 explicitly via sf so that PLY coordinates
+  # are reliable longitude/latitude values for app.js to use directly.
+  pts_wgs <- st_transform(
+    st_as_sf(data.frame(X = clipped_las@data$X, Y = clipped_las@data$Y),
+             coords = c("X", "Y"), crs = cs13_m),
+    4326
+  )
+  wgs_xy <- st_coordinates(pts_wgs)  # n × 2: [longitude, latitude]
+  lon    <- wgs_xy[, 1]
+  lat    <- wgs_xy[, 2]
+  z_all  <- clipped_las@data$Z
+  ids    <- clipped_las@data$treeID
 
-  bg_subset <- clipped_las@data[treeID != tree_id, .(X, Y, Z, treeID)]
-  if (nrow(bg_subset) > 0) {
+  # Write target PLY (points for this tree, WGS84 lon/lat/Z).
+  is_target <- ids == tree_id
+  if (any(is_target)) {
+    write_ply_xyz(
+      cbind(lon[is_target], lat[is_target], z_all[is_target]),
+      target_path
+    )
+    message("Wrote ", target_path)
+  }
+
+  # Write background PLY (all other buffer points, WGS84 lon/lat/Z + treeID).
+  is_bg <- !is_target
+  if (any(is_bg)) {
     write_ply_with_treeid(
-      as.matrix(bg_subset[, .(X, Y, Z)]),
-      bg_subset$treeID,
-      bg_path 
+      cbind(lon[is_bg], lat[is_bg], z_all[is_bg]),
+      ids[is_bg],
+      bg_path
     )
     message("Wrote ", bg_path)
   }
