@@ -117,9 +117,8 @@ tree_points <- st_sf(
   )
 st_crs(tree_points) <- cs13_m  
 
-tree_points <- st_transform(tree_points, 4326)
-
 clip_windows <- st_buffer(tree_points, dist = WEB_POINT_CLOUD_BUFFER_M)
+clip_windows <- st_transform(clip_windows, 4326)
 if (nrow(clip_windows) == 0) {
   stop("No buffered clip windows were created from ", CROWNS_GEOJSON_PATH)
 }
